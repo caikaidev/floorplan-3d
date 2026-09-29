@@ -5,7 +5,7 @@
 ## 功能
 
 **2D 平面布置**
-- 按原始户型 1:60 / 1:100 比例显示，尺寸单位 mm
+- 内置户型：三室两厅两卫（含北侧儿童房、主卧、次卧三个飘窗，入户为一梯一户电梯厅），按原始户型 1:60 / 1:100 比例显示，尺寸单位 mm
 - 从左侧家具库拖入 60 余种家具家电（卧室、客厅、餐厨、卫浴、家电、书房休闲）
 - 拖动移动、旋转（Shift 自由角度）、调整尺寸，贴墙自动吸附
 - 测量工具（靠近墙面自动吸附，Shift 锁定水平 / 垂直）
@@ -40,7 +40,11 @@ python3 -m http.server 8000
 # 访问 http://localhost:8000
 ```
 
-> Three.js 通过 jsDelivr CDN 加载，首次打开 3D 场景需要联网。
+> Three.js r160 已放在 `vendor/three/` 下，通过网址访问时全部从本站加载，不依赖外部 CDN。直接双击打开（`file://`）时浏览器不允许加载本地模块，会退回 jsDelivr CDN，此时 3D 场景需要联网。
+
+## 部署
+
+纯静态站点，可直接部署到 Cloudflare Pages：连接本仓库，框架预设选 None，构建命令留空，输出目录填 `/`。绑定自己的域名可避开 `pages.dev` 在国内的访问问题。
 
 ## 快捷键
 
@@ -63,7 +67,7 @@ python3 -m http.server 8000
 
 - 原生 HTML / CSS / JavaScript，无框架、无构建步骤
 - 2D 平面图用 SVG 绘制
-- 3D 场景用 [Three.js](https://threejs.org/) r160（OrbitControls、PointerLockControls、RoundedBoxGeometry、RoomEnvironment、CSS2DRenderer）
+- 3D 场景用 [Three.js](https://threejs.org/) r160（本地 `vendor/three/`，MIT 协议）（OrbitControls、PointerLockControls、RoundedBoxGeometry、RoomEnvironment、CSS2DRenderer）
 - 数据保存在 `localStorage`
 
 ## 自定义户型
@@ -71,7 +75,9 @@ python3 -m http.server 8000
 户型数据写在 `index.html` 里：
 
 - `ROOMS`：房间多边形、名称、默认地面材料
-- `WALLS` / `WINS`：墙体与窗洞
+- `WALLS` / `WINS`：墙体与窗洞（窗的第 5 个值是窗台高度，单位 m）
+- `DOORS` / `SLIDES`：平开门与推拉门
+- 飘窗是 `counted:false` 的房间，台面高度 `BAY_H`，吊顶后净高 `H`
 - `MATS`：地面材料名称与单价
 - `LIB`：家具库（类型、名称、默认尺寸、颜色）
 - `buildFurniture()`：各类家具的 3D 模型
