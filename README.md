@@ -40,7 +40,11 @@ python3 -m http.server 8000
 # 访问 http://localhost:8000
 ```
 
-> Three.js 通过 jsDelivr CDN 加载，首次打开 3D 场景需要联网。
+> Three.js r160 已放在 `vendor/three/` 下，通过网址访问时全部从本站加载，不依赖外部 CDN。直接双击打开（`file://`）时浏览器不允许加载本地模块，会退回 jsDelivr CDN，此时 3D 场景需要联网。
+
+## 部署
+
+纯静态站点，可直接部署到 Cloudflare Pages：连接本仓库，框架预设选 None，构建命令留空，输出目录填 `/`。绑定自己的域名可避开 `pages.dev` 在国内的访问问题。
 
 ## 快捷键
 
@@ -63,7 +67,7 @@ python3 -m http.server 8000
 
 - 原生 HTML / CSS / JavaScript，无框架、无构建步骤
 - 2D 平面图用 SVG 绘制
-- 3D 场景用 [Three.js](https://threejs.org/) r160（OrbitControls、PointerLockControls、RoundedBoxGeometry、RoomEnvironment、CSS2DRenderer）
+- 3D 场景用 [Three.js](https://threejs.org/) r160（本地 `vendor/three/`，MIT 协议）（OrbitControls、PointerLockControls、RoundedBoxGeometry、RoomEnvironment、CSS2DRenderer）
 - 数据保存在 `localStorage`
 
 ## 自定义户型

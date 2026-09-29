@@ -213,11 +213,15 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
   .brand span,footer .only2d{display:none!important}
 }
 </style>
-<script type="importmap">
-{"imports":{
-  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-}}
+<script>
+// Three.js 放在仓库 vendor/ 下，部署后全部从自己的域名加载（不依赖海外 CDN）；
+// 直接双击打开（file://）时浏览器不允许加载本地模块，退回 jsDelivr CDN
+(() => {
+  const base = location.protocol === 'file:' ? 'https://cdn.jsdelivr.net/npm/three@0.160.0/' : new URL('vendor/three/', location.href).href;
+  const im = document.createElement('script'); im.type = 'importmap';
+  im.textContent = JSON.stringify({imports:{'three':base + 'build/three.module.js', 'three/addons/':base + 'examples/jsm/'}});
+  document.currentScript.after(im);
+})();
 </script>
 </head>
 <body>
