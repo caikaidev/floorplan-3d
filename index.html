@@ -69,6 +69,11 @@ main{position:relative;overflow:hidden;background:var(--paper)}
 .modehint{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--ink);color:#fff;
   padding:5px 12px;border-radius:20px;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none}
 .modehint.show{opacity:.9}
+#focusBar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:6;display:none;align-items:center;gap:8px;white-space:nowrap;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:5px 6px 5px 12px;font-size:13px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+#focusBar select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)}
+#focusBar .btn{background:var(--accent);color:#fff}
+@media (max-width:1100px){#focusBar{top:10px;bottom:auto}}   /* 窄屏底部是家具操作栏，切换栏放到顶部 */
 footer{grid-column:1/-1;display:flex;gap:18px;align-items:center;padding:0 14px;background:var(--panel);overflow:hidden;white-space:nowrap;
   border-top:1px solid var(--line);color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
 #tip{overflow:hidden;text-overflow:ellipsis}
@@ -92,6 +97,7 @@ tr.click:hover td{background:#faf5ee}
 .form input[type=color]{padding:2px;height:30px}
 .actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .actions .btn{border:1px solid var(--line);background:#fff}
+.actions .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .mats{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .mat{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff;cursor:pointer;text-align:left}
 .mat.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
@@ -326,6 +332,8 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
     </div>
     <div class="scalebar" id="scalebar"><span id="sbText">1 m</span><div class="bar" id="sbBar"></div></div>
     <div class="modehint" id="modehint"></div>
+    <div id="focusBar"><span data-en="Viewing">单独查看</span><select id="focusSel"></select>
+      <button class="btn" id="focusExit" data-en="Back to whole home">返回全屋</button></div>
     <div id="fab"></div>
   </main>
 
@@ -547,7 +555,7 @@ const svg = $('#plan');
 
 /* ======================= 状态 / 历史 / 存储 ======================= */
 let state = load() || defaultState();
-const ui = {tool:'select', sel:null, mA:null, mCur:null,
+const ui = {tool:'select', sel:null, mA:null, mCur:null, focus:null,
   layers:{dims:true, labels:true, furn:true, grid:false, bearing:false, wallSnap:true}};
 let view = {x0:0, y0:0, s:.06};
 const undoStack = [], redoStack = [];
@@ -565,6 +573,37 @@ const getF = id => state.furniture.find(f => f.id === id);
 const area = poly => Math.abs(poly.reduce((a,p,i) => { const q = poly[(i+1)%poly.length]; return a + p[0]*q[1] - q[0]*p[1]; }, 0)) / 2 / 1e6;
 const perim = poly => poly.reduce((a,p,i) => { const q = poly[(i+1)%poly.length]; return a + Math.hypot(q[0]-p[0], q[1]-p[1]); }, 0) / 1000;
 const bbox = poly => { const xs = poly.map(p=>p[0]), ys = poly.map(p=>p[1]); return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]; };
+
+/* ---------- 单独查看某个房间 ----------
+ * 焦点范围 = 房间本身 + 与它相邻的飘窗；墙体只保留贴着这些区域的一段，门窗只保留房间自己的 */
+const boxDist = (a, b) => Math.hypot(Math.max(0, a[0]-b[2], b[0]-a[2]), Math.max(0, a[1]-b[3], b[1]-a[3]));
+const edgesOf = poly => poly.map((p,i) => { const q = poly[(i+1)%poly.length]; return [Math.min(p[0],q[0]),Math.min(p[1],q[1]),Math.max(p[0],q[0]),Math.max(p[1],q[1])]; });
+const inPoly = (x, y, poly) => { let c = false; for (let i = 0, j = poly.length-1; i < poly.length; j = i++){ const [xi,yi] = poly[i], [xj,yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj-xi)*(y-yi)/(yj-yi) + xi) c = !c; } return c; };
+let focusCache = null;
+// 房间 + 与它相邻的飘窗
+function roomGroup(room){
+  const own = edgesOf(room.poly);
+  return [room, ...ROOMS.filter(r => r !== room && r.counted === false && edgesOf(r.poly).some(e => own.some(f => boxDist(e, f) < 1)))];
+}
+function focusScope(){
+  if (!ui.focus) return null;
+  if (focusCache?.id === ui.focus) return focusCache;
+  const room = ROOMS.find(r => r.id === ui.focus), rooms = roomGroup(room);
+  const edges = rooms.flatMap(r => edgesOf(r.poly)), touch = rc => edges.filter(e => boxDist(rc, e) <= 30), P = 260;
+  const walls = [];
+  WALLS.forEach((w, i) => {
+    const es = touch(w); if (!es.length) return;
+    const c = [Math.min(...es.map(e => e[0]))-P, Math.min(...es.map(e => e[1]))-P, Math.max(...es.map(e => e[2]))+P, Math.max(...es.map(e => e[3]))+P];
+    const r = [Math.max(w[0],c[0]), Math.max(w[1],c[1]), Math.min(w[2],c[2]), Math.min(w[3],c[3]), w[4]];
+    if (r[2] - r[0] > 1 && r[3] - r[1] > 1) walls.push({i, rect:r});
+  });
+  const bs = rooms.map(r => bbox(r.poly));
+  return focusCache = {id:ui.focus, room, rooms, walls,
+    wins:WINS.filter(w => touch(w).length), doors:DOORS.filter(d => touch(d.rect).length), slides:SLIDES.filter(d => touch(d.rect).length),
+    box:[Math.min(...bs.map(b => b[0])), Math.min(...bs.map(b => b[1])), Math.max(...bs.map(b => b[2])), Math.max(...bs.map(b => b[3]))]};
+}
+const inFocus = f => { const sc = focusScope(); return !sc || sc.rooms.some(r => inPoly(f.cx, f.cy, r.poly)); };
+const focusWalls = () => focusScope()?.walls ?? WALLS.map((rect, i) => ({i, rect}));
 function aabb(f){ const a = f.rot*Math.PI/180, c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a)); return {hw:f.w/2*c + f.d/2*s, hh:f.w/2*s + f.d/2*c}; }
 const fmt = (n, d=2) => n.toFixed(d);
 const norm = a => ((Math.round(a) % 360) + 360) % 360;
@@ -710,16 +749,17 @@ function furnSVG(t,w,d,c){
 const NOLABEL = ['plant','floorlamp','sidetable','barstool','beanbag'];
 function renderRooms(){
   let s = '';
-  ROOMS.forEach(r => s += `<polygon class="room" data-room="${r.id}" points="${r.poly.map(p=>p.join(',')).join(' ')}" fill="url(#m-${state.rooms[r.id].mat})"/>`);
+  const sc = focusScope();
+  (sc ? sc.rooms : ROOMS).forEach(r => s += `<polygon class="room" data-room="${r.id}" points="${r.poly.map(p=>p.join(',')).join(' ')}" fill="url(#m-${state.rooms[r.id].mat})"/>`);
   const sill = ([a,b,c,d]) => `<rect x="${a}" y="${b}" width="${c-a}" height="${d-b}" fill="#e2dacb" stroke="#b9b0a0" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
-  DOORS.forEach(d => s += sill(d.rect)); SLIDES.forEach(d => s += sill(d.rect));
+  (sc ? sc.doors : DOORS).forEach(d => s += sill(d.rect)); (sc ? sc.slides : SLIDES).forEach(d => s += sill(d.rect));
   $('#gRooms').innerHTML = s;
 }
 
 function renderFurn(){
   const g = $('#gFurn');
   g.setAttribute('display', ui.layers.furn ? 'inline' : 'none');
-  g.innerHTML = state.furniture.map(f => {
+  g.innerHTML = state.furniture.filter(f => inFocus(f) || ui.sel?.id === f.id).map(f => {
     const fs = Math.max(80, Math.min(170, Math.min(f.w,f.d)*.2));
     const label = Math.min(f.w,f.d) >= 380 && !NOLABEL.includes(f.type)
       ? `<text transform="rotate(${-f.rot})" font-size="${fs}" text-anchor="middle" dominant-baseline="central" fill="#4a443c" opacity=".8" pointer-events="none">${esc(nm(f.name))}</text>` : '';
@@ -728,7 +768,7 @@ function renderFurn(){
 }
 
 function renderWalls(){
-  $('#gWalls').innerHTML = WALLS.map((w,i) => {
+  $('#gWalls').innerHTML = focusWalls().map(({i, rect:w}) => {
     const [x0,y0,x1,y1,k] = w, id = 'w'+i, dem = state.demolished.includes(id);
     let fill = k==='b' ? (ui.layers.bearing ? '#b8412c' : '#26241f') : k==='low' ? '#e9e3d8' : k==='e' ? '#8f897d' : '#a7a195';
     let ex = k==='low' ? 'stroke="#8f897d" stroke-width="1" vector-effect="non-scaling-stroke"' : '';
@@ -740,14 +780,15 @@ function renderWalls(){
 function renderOpenings(){
   const WS = 'stroke="#4f7394" stroke-width="1" vector-effect="non-scaling-stroke"';
   let s = '';
-  WINS.forEach(([x0,y0,x1,y1]) => {
+  const sc = focusScope();
+  (sc ? sc.wins : WINS).forEach(([x0,y0,x1,y1]) => {
     const w = x1-x0, h = y1-y0;
     s += `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#f7fbfd" ${WS}/>`;
     if (w >= h) [1/3,2/3].forEach(t => s += `<line x1="${x0}" y1="${y0+h*t}" x2="${x1}" y2="${y0+h*t}" ${WS}/>`);
     else [1/3,2/3].forEach(t => s += `<line x1="${x0+w*t}" y1="${y0}" x2="${x0+w*t}" y2="${y1}" ${WS}/>`);
   });
   const DS = 'stroke="#3d3a34" stroke-width="1" vector-effect="non-scaling-stroke"';
-  DOORS.forEach(d => {
+  (sc ? sc.doors : DOORS).forEach(d => {
     const [hx,hy] = d.h, L = d.len, T = 40;
     const ox = hx + d.o[0]*L, oy = hy + d.o[1]*L, cx = hx + d.c[0]*L, cy = hy + d.c[1]*L;
     const sweep = d.o[0]*d.c[1] - d.o[1]*d.c[0] > 0 ? 1 : 0;
@@ -755,12 +796,12 @@ function renderOpenings(){
     s += `<polygon points="${hx},${hy} ${ox},${oy} ${ox+d.c[0]*T},${oy+d.c[1]*T} ${hx+d.c[0]*T},${hy+d.c[1]*T}" fill="#fff" stroke="${col}" stroke-width="${d.entry?1.8:1}" vector-effect="non-scaling-stroke"/>`;
     s += `<path d="M${ox} ${oy}A${L} ${L} 0 0 ${sweep} ${cx} ${cy}" fill="none" ${DS} stroke-dasharray="5 3" opacity=".7"/>`;
   });
-  SLIDES.forEach(({rect:[x0,y0,x1,y1],v}) => {
+  (sc ? sc.slides : SLIDES).forEach(({rect:[x0,y0,x1,y1],v}) => {
     if (v){ const L = y1-y0, m = (x0+x1)/2; s += `<rect x="${m-45}" y="${y0}" width="40" height="${L*.55}" fill="#fff" ${DS}/><rect x="${m+5}" y="${y1-L*.55}" width="40" height="${L*.55}" fill="#fff" ${DS}/>`; }
     else { const L = x1-x0, m = (y0+y1)/2; s += `<rect x="${x0}" y="${m-45}" width="${L*.55}" height="40" fill="#fff" ${DS}/><rect x="${x1-L*.55}" y="${m+5}" width="${L*.55}" height="40" fill="#fff" ${DS}/>`; }
   });
   // 入户标识
-  s += `<path d="M8300 5050H7100M7300 4895L7050 5050L7300 5205" fill="none" stroke="#b5653a" stroke-width="2" vector-effect="non-scaling-stroke"/>
+  if (!sc || sc.doors.some(d => d.entry)) s += `<path d="M8300 5050H7100M7300 4895L7050 5050L7300 5205" fill="none" stroke="#b5653a" stroke-width="2" vector-effect="non-scaling-stroke"/>
         <text x="7400" y="4880" font-size="200" fill="#b5653a">${tr('入户','Entry')}</text>`;
   $('#gOpen').innerHTML = s;
 }
@@ -768,7 +809,7 @@ function renderOpenings(){
 function renderLabels(){
   const g = $('#gLabels');
   g.setAttribute('display', ui.layers.labels ? 'inline' : 'none');
-  g.innerHTML = ROOMS.filter(r => r.at).map(r => {
+  g.innerHTML = (focusScope()?.rooms ?? ROOMS).filter(r => r.at).map(r => {
     const [x,y] = r.at, halo = 'stroke="#fbf9f4" stroke-width="45" paint-order="stroke" stroke-linejoin="round"';
     return `<text x="${x}" y="${y}" font-size="250" font-weight="600" text-anchor="middle" fill="#2b2824" ${halo}>${esc(nm(state.rooms[r.id].name))}</text>
       <text x="${x}" y="${y+260}" font-size="175" text-anchor="middle" fill="#7d7366" ${halo}>${fmt(area(r.poly))} m²</text>`;
@@ -788,7 +829,8 @@ function renderDims(){
     return s;
   };
   const g = $('#gDims');
-  g.innerHTML =
+  const sc = focusScope(), b = sc?.box;
+  g.innerHTML = sc ? chain(true, b[1]-650, b[0], [b[2]-b[0]]) + chain(false, b[0]-650, b[1], [b[3]-b[1]]) :
     chain(true,12550,0,[3200,380,240,3420,240,380,2280]) + chain(true,13050,0,[10140]) +
     chain(false,-900,0,[2920,120,2831,240,1629,120,3820]) + chain(false,-1400,0,[11680]) +
     chain(false,10950,0,[600,1041,600,1010,3000,240,3550,188,1451]) + chain(false,11450,0,[11680]);
@@ -862,7 +904,8 @@ function renderPanel(){
   renderFab();
   const p = $('#panel');
   if (ui.sel?.kind === 'furn'){ const f = getF(ui.sel.id); if (f){ p.innerHTML = furnPanel(f); bindFurnPanel(f); return; } }
-  if (ui.sel?.kind === 'room'){ p.innerHTML = roomPanel(ROOMS.find(r => r.id === ui.sel.id)); bindRoomPanel(); return; }
+  const rid = ui.sel?.kind === 'room' ? ui.sel.id : ui.focus;
+  if (rid){ p.innerHTML = roomPanel(ROOMS.find(r => r.id === rid)); bindRoomPanel(rid); return; }
   p.innerHTML = overviewPanel(); bindOverview();
 }
 
@@ -978,7 +1021,7 @@ function syncPaneBtns(){
 function closeDrawers(){ if (narrow()) drawer(null); }
 
 function roomPanel(r){
-  const st = state.rooms[r.id], a = area(r.poly), [x0,y0,x1,y1] = bbox(r.poly), inside = state.furniture.filter(f => f.cx>x0&&f.cx<x1&&f.cy>y0&&f.cy<y1);
+  const st = state.rooms[r.id], a = area(r.poly), [x0,y0,x1,y1] = bbox(r.poly), grp = roomGroup(r), inside = state.furniture.filter(f => grp.some(g => inPoly(f.cx, f.cy, g.poly)));
   const mats = Object.entries(MATS).map(([k,m]) => `<button class="mat ${k===st.mat?'on':''}" data-mat="${k}"><i style="background:${m.sw}"></i><span>${nm(m.name)}<small>¥${m.price}/m²</small></span></button>`).join('');
   return `<section><h3>${tr('房间','Room')}</h3>
     <div class="form"><label class="full">${tr('名称','Name')}<input id="rName" value="${esc(nm(st.name))}"></label></div>
@@ -992,14 +1035,27 @@ function roomPanel(r){
     <div class="total"><span>${tr('材料估价','Estimated cost')}</span><b>¥${Math.round(a*MATS[st.mat].price*1.05).toLocaleString()}</b></div></section>
   <section><h3>${tr('房间内家具','Furniture in room')} <small>${tr(`${inside.length} 件`, `${inside.length} items`)}</small></h3>
     <table>${inside.map(f => `<tr class="click" data-fid="${f.id}"><td>${esc(nm(f.name))}</td><td class="r muted">${f.w}×${f.d}</td></tr>`).join('') || `<tr><td class="muted">${tr('暂无','None')}</td></tr>`}</table>
-    <div class="actions"><button class="btn" id="back">${tr('← 返回总览','← Back to overview')}</button></div></section>`;
+    <div class="actions">${ui.focus === r.id
+      ? `<button class="btn primary" id="unfocus">${tr('← 返回全屋','← Back to whole home')}</button>`
+      : `<button class="btn primary" id="focusBtn">${tr('单独查看这个房间','View this room only')}</button><button class="btn" id="back">${tr('← 返回总览','← Back to overview')}</button>`}</div></section>`;
 }
-function bindRoomPanel(){
-  const id = ui.sel.id;
+function bindRoomPanel(id){
   $('#rName').onchange = e => mutate(() => state.rooms[id].name = e.target.value.trim() || state.rooms[id].name);
   document.querySelectorAll('#panel [data-mat]').forEach(b => b.onclick = () => mutate(() => state.rooms[id].mat = b.dataset.mat));
   document.querySelectorAll('#panel tr[data-fid]').forEach(tr => tr.onclick = () => select({kind:'furn', id:tr.dataset.fid}));
-  $('#back').onclick = () => select(null);
+  if ($('#back')) $('#back').onclick = () => select(null);
+  if ($('#focusBtn')) $('#focusBtn').onclick = () => setFocus(id);
+  if ($('#unfocus')) $('#unfocus').onclick = () => setFocus(null);
+}
+
+// 进入 / 退出单独查看：2D 只画这个房间并放大，3D 只构建这个房间
+function setFocus(id){
+  ui.focus = id || null; focusCache = null;
+  if (ui.sel?.kind === 'room' || (ui.sel?.kind === 'furn' && !inFocus(getF(ui.sel.id) || {cx:NaN, cy:NaN}))) ui.sel = null;
+  const bar = $('#focusBar'); bar.style.display = ui.focus ? 'flex' : 'none';
+  if (ui.focus) $('#focusSel').innerHTML = ROOMS.map(r => `<option value="${r.id}" ${r.id === ui.focus ? 'selected' : ''}>${esc(nm(state.rooms[r.id].name))}</option>`).join('');
+  renderOpenings(); renderDims(); fitView(); renderAll();
+  window.View3D?.focus();
 }
 
 function furnPanel(f){
@@ -1103,9 +1159,10 @@ function applyView(){
   renderSel(); renderMeasure();
 }
 function fitView(){
-  const W = svg.clientWidth, H = svg.clientHeight;
-  view.s = Math.min(W/BOUNDS.w, H/BOUNDS.h);
-  view.x0 = BOUNDS.x - (W/view.s - BOUNDS.w)/2; view.y0 = BOUNDS.y - (H/view.s - BOUNDS.h)/2;
+  const W = svg.clientWidth, H = svg.clientHeight, sc = focusScope();
+  const B = sc ? {x:sc.box[0]-1100, y:sc.box[1]-1300, w:sc.box[2]-sc.box[0]+2200, h:sc.box[3]-sc.box[1]+2400} : BOUNDS;
+  view.s = Math.min(W/B.w, (sc ? H - 120 : H)/B.h);   // 单独查看时上下给切换栏留位置
+  view.x0 = B.x - (W/view.s - B.w)/2; view.y0 = B.y - (H/view.s - B.h)/2;
   applyView();
 }
 function zoomAt(ns, mx, my){
@@ -1291,7 +1348,7 @@ document.addEventListener('keydown', e => {
   else if (k === 'f') fitView();
   else if (k === 'r') rotateSel(e.shiftKey ? -90 : 90);
   else if (k === 'delete' || k === 'backspace'){ e.preventDefault(); deleteSel(); }
-  else if (k === 'escape'){ if (ui.mA){ ui.mA = null; renderMeasure(); } else { if (ui.tool !== 'select') setTool('select'); select(null); } }
+  else if (k === 'escape'){ if (ui.mA){ ui.mA = null; renderMeasure(); } else if (ui.tool !== 'select'){ setTool('select'); select(null); } else if (!ui.sel && ui.focus) setFocus(null); else select(null); }
   else if (k.startsWith('arrow') && ui.sel?.kind === 'furn'){
     e.preventDefault(); const st = e.shiftKey ? 100 : 10;
     mutate(() => { const f = getF(ui.sel.id); if (k==='arrowleft') f.cx -= st; if (k==='arrowright') f.cx += st; if (k==='arrowup') f.cy -= st; if (k==='arrowdown') f.cy += st; });
@@ -1485,6 +1542,8 @@ $('#langBtn').onclick = () => setLang(LANG === 'en' ? 'zh' : 'en');
 
 applyStaticLang(); syncFullscreen();
 buildDefs(); buildLib(); renderOpenings(); renderDims();
+$('#focusSel').onchange = e => setFocus(e.target.value);
+$('#focusExit').onclick = () => setFocus(null);
 $('#tip').textContent = TIPS()['2d'];
 fitView(); renderAll();
 </script>
@@ -2272,7 +2331,8 @@ function shapeOf(poly, flip){ const s = new THREE.Shape(); poly.forEach(([x, y],
 function buildArch(){
   clearGroup(archFloor); clearGroup(archUp); lampG.clear(); doors.length = 0; colliders = [];
   const top = opt.cut;
-  ROOMS.forEach(r => {
+  const sc = focusScope();
+  (sc ? sc.rooms : ROOMS).forEach(r => {
     const m = floorMat(state.rooms[r.id].mat), bay = r.counted === false;
     const geo = bay ? new THREE.ExtrudeGeometry(shapeOf(r.poly), {depth:BAY_H, bevelEnabled:false}) : new THREE.ShapeGeometry(shapeOf(r.poly));
     geo.rotateX(-Math.PI/2);
@@ -2288,16 +2348,17 @@ function buildArch(){
       const pl = new THREE.PointLight(0xffd9a8, 0, 7, 1.6); pl.position.set(wx(r.at[0]), H - .25, wz(r.at[1])); lampG.add(pl);
     }
   });
-  [...DOORS, ...SLIDES].forEach(d => { const [x0, y0, x1, y1] = d.rect; const s = box(M(x1-x0), .012, M(y1-y0), mat('#d8d0c0', {roughness:.3}), wx((x0+x1)/2), 0, wz((y0+y1)/2)); s.castShadow = false; archFloor.add(s); });
-  WALLS.forEach((w, i) => {
+  const doorsF = sc ? sc.doors : DOORS, slidesF = sc ? sc.slides : SLIDES;
+  [...doorsF, ...slidesF].forEach(d => { const [x0, y0, x1, y1] = d.rect; const s = box(M(x1-x0), .012, M(y1-y0), mat('#d8d0c0', {roughness:.3}), wx((x0+x1)/2), 0, wz((y0+y1)/2)); s.castShadow = false; archFloor.add(s); });
+  focusWalls().forEach(({i, rect:w}) => {
     if (state.demolished.includes('w'+i)) return;
     wallBox(w, 0, w[4] === 'low' ? Math.min(1, top) : top);
     colliders.push([wx(w[0]), wz(w[1]), wx(w[2]), wz(w[3])]);
   });
   // 门洞、飘窗洞口上方过梁
-  [...DOORS.map(d => [d.rect, 2.1]), ...SLIDES.map(s => [s.rect, s.v ? 2.4 : 2.1])]
+  [...doorsF.map(d => [d.rect, 2.1]), ...slidesF.map(s => [s.rect, s.v ? 2.4 : 2.1])]
     .forEach(([r, h]) => { if (top > h) wallBox(r, h, top); });
-  WINS.forEach((r, i) => {
+  (sc ? sc.wins : WINS).forEach((r, i) => {
     const sill = r[4] ?? .9, head = Math.min(2.3, H);
     wallBox(r, 0, Math.min(sill, top)); if (top > head) wallBox(r, head, top);
     colliders.push([wx(r[0]), wz(r[1]), wx(r[2]), wz(r[3])]);
@@ -2309,7 +2370,7 @@ function buildArch(){
       mu.position.set(cx + (hz ? t : 0), sill + gh/2, cz + (hz ? 0 : t)); mu.castShadow = true; archUp.add(mu); }
     [sill + .02, gTop - .02].forEach(y => { const tr = new THREE.Mesh(new THREE.BoxGeometry(hz ? L : .06, .04, hz ? .06 : L), frameMat); tr.position.set(cx, y, cz); archUp.add(tr); });
   });
-  DOORS.forEach(d => {
+  doorsF.forEach(d => {
     const pivot = new THREE.Group(), L = M(d.len), dh = Math.min(2.05, top);
     pivot.position.set(wx(d.h[0]), 0, wz(d.h[1]));
     const leaf = box(L, dh, .04, mat(d.entry ? '#6b4f3a' : '#efe6d8', {roughness:.5}), L/2);
@@ -2320,7 +2381,7 @@ function buildArch(){
     door.cur = door.a1; pivot.rotation.y = door.cur; leaf.userData.door = knob.userData.door = door;
     doors.push(door); archUp.add(pivot);
   });
-  SLIDES.forEach(({rect:[x0, y0, x1, y1], v}) => {
+  slidesF.forEach(({rect:[x0, y0, x1, y1], v}) => {
     const L = M(v ? y1-y0 : x1-x0), ph = Math.min(v ? 2.4 : 2.1, top), pl = L*.55;
     [[-1, -.02], [1, .02]].forEach(([s, off]) => {
       const c = s < 0 ? -L/2 + pl/2 : L/2 - pl/2, x = v ? wx((x0+x1)/2) + off : wx(x0) + L/2 + c, z = v ? wz(y0) + L/2 + c : wz((y0+y1)/2) + off;
@@ -2334,13 +2395,13 @@ function buildArch(){
 
 function buildFurn(){
   clearGroup(furnG);
-  state.furniture.forEach(f => furnG.add(buildFurniture(f)));
+  state.furniture.filter(inFocus).forEach(f => furnG.add(buildFurniture(f)));
   furnG.visible = opt.furn; selKey = null; applyGrow();
 }
 
 function buildLabels(){
   labelG.children.slice().forEach(o => { o.element.remove(); labelG.remove(o); });
-  ROOMS.filter(r => r.at).forEach(r => {
+  (focusScope()?.rooms ?? ROOMS).filter(r => r.at).forEach(r => {
     const el = document.createElement('div'); el.className = 'rlabel';
     el.innerHTML = `${esc(nm(state.rooms[r.id].name))}<small>${area(r.poly).toFixed(1)}m²</small>`;
     const o = new CSS2DObject(el); o.position.set(wx(r.at[0]), opt.cut + .15, wz(r.at[1])); o.visible = labelG.visible; labelG.add(o);
@@ -2350,6 +2411,7 @@ function buildLabels(){
     + `<button data-room="__all"><span>${tr('全屋', 'Whole home')}</span><small>${counted.reduce((a, r) => a + area(r.poly), 0).toFixed(2)} m²</small></button>`;
   document.querySelectorAll('#roomList button').forEach(b => b.onclick = () => {
     document.querySelectorAll('#roomList button').forEach(x => x.classList.toggle('on', x === b));
+    if (ui.focus) return setFocus(b.dataset.room === '__all' ? null : b.dataset.room);   // 单独查看时：切换到该房间
     if (opt.mode === 'walk') setMode('orbit');
     b.dataset.room === '__all' ? flyTo(isoWhole()) : flyToRoom(b.dataset.room);
   });
@@ -2358,7 +2420,7 @@ function buildLabels(){
 // 只重建变化的部分
 function sync(force){
   if (!inited || (!active && !force)) return;
-  const a = JSON.stringify([state.rooms, state.demolished, opt.cut]), f = JSON.stringify(state.furniture), l = JSON.stringify([state.rooms, opt.cut]);
+  const a = JSON.stringify([state.rooms, state.demolished, opt.cut, ui.focus]), f = JSON.stringify([state.furniture, ui.focus]), l = JSON.stringify([state.rooms, opt.cut, ui.focus]);
   if (force || a !== sigArch){ sigArch = a; buildArch(); }
   if (force || f !== sigFurn){ sigFurn = f; buildFurn(); }
   if (force || l !== sigLabels){ sigLabels = l; buildLabels(); }
@@ -2418,13 +2480,15 @@ function setPose(P){ camera.position.copy(P.p); orbit.target.copy(P.t); camera.l
 function animate(dur, fn){ return new Promise(res => { anim = {t0:performance.now(), dur, fn, res}; }); }
 const wait = ms => new Promise(r => setTimeout(r, ms));
 function flyTo(B, dur = 900){ fly = {t0:performance.now(), dur, A:curPose(), B}; }
-function flyToRoom(id){
-  const r = ROOMS.find(r => r.id === id), xs = r.poly.map(p => p[0]), ys = r.poly.map(p => p[1]);
+const homePose = () => ui.focus ? roomPose(focusScope().rooms.flatMap(r => r.poly)) : isoWhole();
+function flyToRoom(id){ flyTo(roomPose(ROOMS.find(r => r.id === id).poly)); }
+function roomPose(pts){
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
   const t = new THREE.Vector3(wx((Math.min(...xs)+Math.max(...xs))/2), .6, wz((Math.min(...ys)+Math.max(...ys))/2));
   const size = M(Math.max(Math.max(...xs)-Math.min(...xs), Math.max(...ys)-Math.min(...ys)));
   const dir = camera.position.clone().sub(orbit.target).setY(0); if (dir.lengthSq() < .01) dir.set(.6, 0, .8); dir.normalize();
   const dist = size*1.3 + 2.2;
-  flyTo(pose(t, new THREE.Vector3(t.x + dir.x*dist*.7, dist*1.05, t.z + dir.z*dist*.7)));
+  return pose(t, new THREE.Vector3(t.x + dir.x*dist*.7, dist*1.05, t.z + dir.z*dist*.7));
 }
 
 /* ======================= 进入 / 退出 3D ======================= */
@@ -2554,14 +2618,16 @@ function setMode(m){
     window.select(null);
     if (opt.cut < H){ opt.cut = H; syncCutBtns(); sync(); }
     orbit.enabled = false; fly = null;
-    camera.position.set(wx(8400), 1.6, wz(4840)); camera.lookAt(wx(5000), 1.5, wz(4840));   // 入户门外（电梯厅）
+    const fr = focusScope()?.room;
+    if (fr){ const [x0, y0, x1, y1] = bbox(fr.poly), [ax, ay] = fr.at || [(x0+x1)/2, (y0+y1)/2]; camera.position.set(wx(ax), 1.6, wz(ay)); camera.lookAt(wx((x0+x1)/2), 1.2, wz(y0)); }
+    else { camera.position.set(wx(8400), 1.6, wz(4840)); camera.lookAt(wx(5000), 1.5, wz(4840)); }   // 入户门外（电梯厅）
     $('#walkOverlay').style.display = 'flex';
     syncHint3d();
   } else {
     walkCtl.unlock(); stopTouchWalk(); orbit.enabled = true;
     $('#walkOverlay').style.display = 'none'; $('#cross').style.display = 'none';
     syncHint3d();
-    orbit.target.set(0, 0, 0); flyTo(isoWhole());
+    orbit.target.set(0, 0, 0); flyTo(homePose());
   }
   showLabels(opt.labels && m === 'orbit');
   archUp.traverse(o => { if (o.userData.walkOnly) o.visible = m === 'walk'; });
@@ -2618,7 +2684,7 @@ function bindUI(){
   $('#walkExit').onclick = () => setMode('orbit');
   bindJoystick();
   syncWalkTexts();
-  $('#vIso').onclick = () => { if (opt.mode === 'walk') setMode('orbit'); else flyTo(isoWhole()); };
+  $('#vIso').onclick = () => { if (opt.mode === 'walk') setMode('orbit'); else flyTo(homePose()); };
   $('#vTop').onclick = () => { if (opt.mode === 'walk') setMode('orbit'); flyTo(topWhole()); };
   document.querySelectorAll('[data-cut]').forEach(b => b.onclick = () => { if (opt.mode === 'walk') return; opt.cut = +b.dataset.cut; syncCutBtns(); sync(); });
   document.querySelectorAll('#toggles3d .btn').forEach(b => b.onclick = () => {
@@ -2650,7 +2716,7 @@ function shot(){ const a = document.createElement('a'); a.download = tr('户型�
 
 function relang(){ syncWalkTexts(); if (inited) buildLabels(); }
 
-window.View3D = {enter, exit, relang, sync:() => sync(), shot, groundAt, flyToRoom:id => active && !anim && flyToRoom(id), walking:() => active && opt.mode === 'walk'};
+window.View3D = {focus:() => { if (!active) return; sync(); if (opt.mode === 'walk') setMode('orbit'); else flyTo(homePose()); }, enter, exit, relang, sync:() => sync(), shot, groundAt, flyToRoom:id => active && !anim && flyToRoom(id), walking:() => active && opt.mode === 'walk'};
 </script>
 </body>
 </html>
