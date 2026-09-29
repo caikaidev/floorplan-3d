@@ -370,6 +370,7 @@ const NAMES_EN = {
   '单人沙发':'Armchair', '懒人沙发':'Beanbag', '茶几':'Coffee Table', '边几':'Side Table', '电视柜':'TV Stand', '地毯':'Rug',
   '鞋柜':'Shoe Cabinet', '玄关柜':'Entry Cabinet', '落地灯':'Floor Lamp', '绿植':'Plant', '大绿植':'Large Plant',
   '餐桌':'Dining Table', '六人餐桌':'6-Seat Dining Table', '圆桌':'Round Table', '餐椅':'Dining Chair', '岛台':'Kitchen Island',
+  '到顶定制柜':'Floor-to-ceiling Cabinet', '床头定制柜':'Headboard Cabinet', '儿童游戏桌':'Kids Play Table', '儿童小凳':'Kids Stool', '游戏地毯':'Play Mat',
   '吧椅':'Bar Stool', '橱柜台面':'Kitchen Counter', '燃气灶':'Gas Stove', '水槽':'Sink', '冰箱':'Fridge', '餐边柜':'Sideboard',
   '马桶':'Toilet', '浴室柜':'Vanity', '双盆浴室柜':'Double Vanity', '淋浴房':'Shower', '淋浴区':'Shower Area', '浴缸':'Bathtub',
   '洗衣机':'Washer', '洗衣池':'Laundry Sink', '电热水器':'Water Heater', '储物柜':'Storage Cabinet', '65 寸电视':'65" TV',
@@ -393,7 +394,7 @@ function applyStaticLang(){
  *  下：3200/380/240/3420/240/380/2280 = 10140
  *  左：2920/120/2831/240/1629/120/3820 = 11680
  *  右：600/1041/600/1010/3000/240/3550/188/1451 = 11680
- *  三个飘窗：台面高 550，进深 600；吊顶后净高 2400；墙体均不可拆
+ *  三个飘窗：台面高 550，进深 600（次卧飘窗外凸，右侧距东墙 300）；吊顶后净高 2400；墙体均不可拆
  * ============================================================ */
 // 墙体：[x0,y0,x1,y1,类型]  b=承重(黑) e=外墙 n=可拆非承重 low=矮墙
 const WALLS = [
@@ -407,8 +408,10 @@ const WALLS = [
   // 门厅（电梯厅）
   [6820,3010,7085,3251,'e'],[8980,3010,9510,3251,'e'],[9270,3251,9510,6251,'e'],[6580,5380,6820,6251,'b'],
   // 次卧
-  [6580,6251,9510,6491,'b'],[9510,6251,10380,6491,'e'],[10140,6491,10380,10229,'e'],[7480,9670,7860,10229,'e'],
-  [6580,6491,7240,6640,'b'],[7240,6491,7480,6690,'b'],[7240,7580,7480,10041,'b'],[7240,10041,7480,10420,'e'],
+  [6580,6251,9510,6491,'b'],[9510,6251,10380,6491,'e'],[10140,6491,10380,9681,'e'],
+  // 次卧南墙 + 外凸飘窗（飘窗进深 600，右侧距东墙 300）
+  [7480,9441,7860,9681,'e'],[9840,9441,10140,9681,'e'],[7740,9681,7860,10229,'e'],[9840,9681,9960,10229,'e'],
+  [6580,6491,7240,6640,'b'],[7240,6491,7480,6690,'b'],[7240,7580,7480,9681,'b'],[7240,9681,7480,10420,'e'],
   // 儿童房 / 卫生间 / 过道
   [900,2920,2610,3040,'b'],[3500,2920,3580,3040,'b'],[2430,3880,2550,6800,'b'],[900,5870,2430,6110,'b'],[900,4960,1200,5870,'b'],
   // 主卫 / 主卧
@@ -420,7 +423,7 @@ const WALLS = [
 // 窗：[x0,y0,x1,y1,窗台高(m)]
 const WINS = [
   [900,-240,3200,0,.55],[660,4260,900,4860,1.4],[0,5870,660,6110,1.4],[4700,1390,5710,1641,.9],[7085,3010,8980,3251,.9],
-  [0,11680,3200,11920,.55],[7860,10041,10140,10229,.55],[4520,11680,7480,11920,.9],[7240,10420,7480,11680,.9],
+  [0,11680,3200,11920,.55],[7860,10041,9840,10229,.55],[4520,11680,7480,11920,.9],[7240,10420,7480,11680,.9],
 ];
 // 平开门：洞口、铰点、关闭方向、开启方向、门宽
 const DOORS = [
@@ -444,11 +447,11 @@ const ROOMS = [
   {id:'kitchen', name:'厨房', poly:[[3820,2241],[4370,2241],[4370,1641],[6040,1641],[6040,2241],[6580,2241],[6580,4300],[3820,4300]], mat:'tile600', at:[5200,3000]},
   {id:'living', name:'客餐厅', poly:[[3820,4300],[6580,4300],[6580,6640],[7240,6640],[7240,9990],[3820,9990]], mat:'tile800', at:[5300,7050]},
   {id:'foyer', name:'门厅', poly:R(6820,3251,9270,6251), mat:'tile800', at:[8045,4450]},
-  {id:'second', name:'次卧', poly:[[7480,6491],[10140,6491],[10140,9441],[7860,9441],[7860,9670],[7480,9670]], mat:'wood', at:[8300,7500]},
+  {id:'second', name:'次卧', poly:R(7480,6491,10140,9441), mat:'wood', at:[7900,7900]},
   {id:'balcony', name:'阳台', poly:[[3820,10230],[4580,10230],[4580,9990],[7030,9990],[7030,10230],[7240,10230],[7240,11680],[3820,11680]], mat:'tile600', at:[5530,10750]},
   {id:'bay1', name:'儿童房飘窗', poly:R(900,0,3200,600), mat:'marble', counted:false},
   {id:'bay2', name:'主卧飘窗', poly:R(0,11080,3200,11680), mat:'marble', counted:false},
-  {id:'bay3', name:'次卧飘窗', poly:R(7860,9441,10140,10041), mat:'marble', counted:false},
+  {id:'bay3', name:'次卧飘窗', poly:R(7860,9441,9840,10041), mat:'marble', counted:false},
 ];
 const MATS = {
   wood:    {name:'橡木地板', price:320, sw:'#d8b88a'},
@@ -466,7 +469,8 @@ const LIB = [
     ['bed','双人床 1.8m',1800,2000,'#c9d6df'],['bed','双人床 1.5m',1500,2000,'#d8c7dc'],['bed','单人床',1200,2000,'#e8d5b5'],
     ['crib','婴儿床',1250,700,'#efe3d0'],['nightstand','床头柜',450,400,'#e8dccb'],['wardrobe','衣柜',2000,600,'#efe6d8'],
     ['wardrobe','小衣柜',1200,550,'#efe6d8'],['dresser','梳妆台',1000,450,'#efe6d8'],['desk','书桌',1200,600,'#e2cfb4'],
-    ['chair','椅子',450,480,'#cfc6b8'],['bookshelf','书架',800,300,'#e2cfb4'],['baycushion','飘窗垫',520,1800,'#e7dccd']]},
+    ['chair','椅子',450,480,'#cfc6b8'],['bookshelf','书架',800,300,'#e2cfb4'],['baycushion','飘窗垫',520,1800,'#e7dccd'],
+    ['tallcab','到顶定制柜',1800,600,'#efe9df'],['kidtable','儿童游戏桌',800,600,'#f1e3c8'],['kidstool','儿童小凳',300,300,'#e9b9a0'],['rug','游戏地毯',1800,1500,'#d9e2cf']]},
   {cat:'客厅', items:[
     ['sofa','三人沙发',2400,900,'#b7c4b0'],['sofa','双人沙发',1700,880,'#c3cbd6'],['cornersofa','转角沙发',2800,1700,'#b7c4b0'],
     ['armchair','单人沙发',850,850,'#d6b99a'],['beanbag','懒人沙发',800,800,'#e0b98f'],['coffeetable','茶几',1300,650,'#e8dccb'],
@@ -523,8 +527,11 @@ function defaultFurniture(){ return [
   // 门厅
   F('shoecab','鞋柜',8045,6050,2450,400,180),
   // 次卧
-  F('bed','双人床',9140,8650,1500,2000,90,'#d8c7dc'), F('wardrobe','衣柜',9340,6791,1600,600),
-  F('desk','书桌',9890,7500,800,500,90), F('chair','椅子',9420,7500,450,480,270), F('baycushion','飘窗垫',9000,9741,520,2200,90),
+  // 1.2m 床靠南；东墙整面到顶定制柜：北段 600 深衣柜，床头段 300 深；床以北留给游戏地毯和儿童桌凳
+  F('tallcab','到顶定制柜',9840,7366,1750,600,90), F('tallcab','床头定制柜',9990,8841,1200,300,90),
+  F('bed','单人床',8840,8841,1200,2000,90,'#e8d5b5'), F('baycushion','飘窗垫',8850,9741,520,1900,90),
+  F('rug','游戏地毯',8530,7450,1900,1500,0,'#d9e2cf'), F('kidtable','儿童游戏桌',8750,7500,800,600),
+  F('kidstool','儿童小凳',8750,6920,300,300), F('kidstool','儿童小凳',8750,8030,300,300),
   // 阳台
   F('washer','洗衣机',4120,10950,600,600,270), F('armchair','休闲椅',6100,10900,750,750,0,'#d6b99a'), F('plant','绿植',6900,11400,500,500),
 ];}
@@ -673,7 +680,7 @@ function furnSVG(t,w,d,c){
       return s + rc(x,y,w,b,dk,'rx="50"') + rc(x,y,b,d,dk,'rx="50"') + rc(x+w-200,y,200,k,dk,'rx="50"') + rc(x,y+d-200,k,200,dk,'rx="50"');
     }
     case 'nightstand': return rc(x,y,w,d,c,'rx="30"') + `<circle r="${m*.24}" fill="#fff6dd" ${ST}/>` + `<circle r="${m*.08}" fill="${shade(c,.8)}" ${ST}/>`;
-    case 'wardrobe': {
+    case 'wardrobe': case 'tallcab': {
       let s = rc(x,y,w,d,c) + ln(x+50,0,x+w-50,0);
       for (let hx = x+160; hx < x+w-100; hx += 180) s += ln(hx-45,-d*.28,hx+45,d*.28,'opacity=".6"');
       return s;
@@ -692,7 +699,7 @@ function furnSVG(t,w,d,c){
       for (let k=0;k<8;k++) s += `<ellipse cx="0" cy="${-m*.27}" rx="${m*.1}" ry="${m*.21}" transform="rotate(${k*45})" fill="${shade(c,.8)}" ${ST}/>`;
       return s + `<circle r="${m*.1}" fill="#8a6a4a" ${ST}/>`;
     }
-    case 'table': return rc(x,y,w,d,c,'rx="30"') + rc(x+50,y+50,w-100,d-100,'none','rx="20" opacity=".4"');
+    case 'table': case 'kidtable': return rc(x,y,w,d,c,'rx="30"') + rc(x+50,y+50,w-100,d-100,'none','rx="20" opacity=".4"');
     case 'roundtable': return ec(0,0,w/2,d/2,c) + ec(0,0,w/2-50,d/2-50,'none','opacity=".4"');
     case 'counter': return rc(x,y,w,d,c) + ln(x,y+d-40,x+w,y+d-40,DASH);
     case 'stove': {
@@ -717,7 +724,7 @@ function furnSVG(t,w,d,c){
     case 'sidetable': return ec(0,0,w/2,d/2,c) + ec(0,0,w*.12,d*.12,'none','opacity=".5"');
     case 'floorlamp': return `<circle r="${m*.5}" fill="#fff6dd" fill-opacity=".85" ${ST}/>` + `<circle r="${m*.32}" fill="none" ${ST} ${DASH}/>` + `<circle r="${m*.07}" fill="${c}" ${ST}/>`;
     case 'island': return rc(x,y,w,d,c) + ln(x,y+d-250,x+w,y+d-250,DASH);
-    case 'barstool': return `<circle r="${m/2}" fill="${c}" ${ST}/><circle r="${m*.3}" fill="${shade(c,1.15)}" ${ST}/>`;
+    case 'barstool': case 'kidstool': return `<circle r="${m/2}" fill="${c}" ${ST}/><circle r="${m*.3}" fill="${shade(c,1.15)}" ${ST}/>`;
     case 'waterheater': return rc(x,y,w,d,c,`rx="${d/2}" ${DASH}`) + ln(x+w*.2,0,x+w*.8,0,DASH);
     case 'tv': return rc(x,y,w,d,c,'rx="10"') + rc(x+w*.3,y+d,w*.4,Math.min(40,d),'#666');
     case 'aircon': return rc(x,y,w,d,c,'rx="30"') + ln(x+40,y+d*.72,x+w-40,y+d*.72) + ln(x+40,y+d*.86,x+w-40,y+d*.86);
@@ -1884,10 +1891,10 @@ function buildFurniture(f){
       g.add(box(.16, .025, .22, '#2f5d62', w*.24, .5, .04), box(.14, .02, .2, '#e6dccd', w*.24, .525, .04));
       break;
     }
-    case 'wardrobe': case 'cabinet': case 'shoecab': {
+    case 'wardrobe': case 'tallcab': case 'cabinet': case 'shoecab': {
       const cm = mat(c, {roughness:.55}), fz = d/2 - .02;
-      if (f.type === 'wardrobe'){
-        const h = 2.2, n = Math.max(1, Math.round(w/.5));
+      if (f.type === 'wardrobe' || f.type === 'tallcab'){
+        const h = f.type === 'tallcab' ? H - .005 : 2.2, n = Math.max(1, Math.round(w/.5));
         g.add(box(w - .02, .08, d - .06, '#4a4641', 0, 0, -.03), box(w, h - .08, d - .02, cm, 0, .08, -.01));
         fronts(g, -w/2, .08, w, h - .1, fz, n, 1, cm, 'bar', 1.05);
         g.add(box(w, .02, d - .02, darker(c, .9), 0, h - .02, -.01));
@@ -2021,6 +2028,12 @@ function buildFurniture(f){
         const lf = blob(len/2, .005, len*.27, lm[k % 2], s0 + len/2, 0, 0, 16); lf.rotation.z = -.3;
         p.add(box(s0, .005, .005, '#6f8f4a', s0/2, 0, 0), lf); g.add(p);
       }
+      break;
+    }
+    case 'kidtable': {   // 儿童游戏桌：桌面高 0.5 m，大圆角
+      const lw = woodM(darker(c, .7)), top = .5;
+      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a, b]) => g.add(rod([a*(w/2 - .08), 0, b*(d/2 - .08)], [a*(w/2 - .09), top - .03, b*(d/2 - .09)], .016, lw, .022)));
+      g.add(rbox(w, .03, d, mat(c, {roughness:.45}), 0, top - .03, 0, .06));
       break;
     }
     case 'table': {
@@ -2198,10 +2211,10 @@ function buildFurniture(f){
       vase(g, -w*.25, .89, -.05, .05, .22, '#e9e2d6', R);
       break;
     }
-    case 'barstool': {
-      const r = Math.min(w, d)/2, bm = blackMetal(), sy = .7;
+    case 'barstool': case 'kidstool': {   // 儿童小凳坐高 0.26 m
+      const r = Math.min(w, d)/2, bm = f.type === 'kidstool' ? woodM('#c9a27e') : blackMetal(), sy = f.type === 'kidstool' ? .26 : .7;
       [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([a, b]) => g.add(rod([a*r*.72, 0, b*r*.72], [a*r*.4, sy, b*r*.4], .011, bm)));
-      g.add(ring(Math.SQRT2*r*(.72 - .32*.4), .008, bm, 0, .28, 0), cyl(r*.55, r*.55, .02, bm, 0, sy - .01, 0, 32));
+      g.add(ring(Math.SQRT2*r*(.72 - .32*.4), .008, bm, 0, sy*.4, 0), cyl(r*.55, r*.55, .02, bm, 0, sy - .01, 0, 32));
       g.add(lathe([[0, 0], [r*.85, 0], [r*.95, .02], [r*.97, .045], [r*.9, .07], [0, .075]], mat(c, {roughness:.6}), 0, sy, 0, 40));
       break;
     }
@@ -2357,7 +2370,8 @@ function buildArch(){
     wallBox(w, 0, w[4] === 'low' ? Math.min(1, top) : top);
     colliders.push([wx(w[0]), wz(w[1]), wx(w[2]), wz(w[3])]);
   });
-  // 门洞、飘窗洞口上方过梁
+  // 门洞、飘窗上方过梁
+  (sc ? sc.rooms : ROOMS).filter(r => r.counted === false).forEach(r => { const b = bbox(r.poly); if (top > 2.3) wallBox(b, 2.3, top); });
   [...doorsF.map(d => [d.rect, 2.1]), ...slidesF.map(s => [s.rect, s.v ? 2.4 : 2.1])]
     .forEach(([r, h]) => { if (top > h) wallBox(r, h, top); });
   (sc ? sc.wins : WINS).forEach((r, i) => {
