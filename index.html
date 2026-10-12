@@ -1672,7 +1672,7 @@ function init(){
   });
   new ResizeObserver(() => {
     renderer.setSize(SW(), SH()); labelRenderer.setSize(SW(), SH());
-    camera.aspect = SW()/SH(); camera.updateProjectionMatrix();
+    camera.aspect = SW()/SH(); applyFov();
   }).observe(stage);
   bindUI();
 }
@@ -2510,7 +2510,7 @@ function roomPose(pts){
 /* ======================= 进入 / 退出 3D ======================= */
 async function enter(){
   init(); active = true;
-  renderer.setSize(SW(), SH()); labelRenderer.setSize(SW(), SH()); camera.aspect = SW()/SH(); camera.updateProjectionMatrix();
+  renderer.setSize(SW(), SH()); labelRenderer.setSize(SW(), SH()); camera.aspect = SW()/SH(); applyFov();
   sync(true);
   opt.mode = 'orbit'; orbit.enabled = false; showLabels(false);
   const A = planPose(), B = isoFrom(A);
@@ -2530,7 +2530,7 @@ async function enter(){
 }
 async function exit(){
   if (opt.mode === 'walk'){ walkCtl.unlock(); stopTouchWalk(); $('#hint3d').textContent = HINT_ORBIT; $('#walkOverlay').style.display = 'none'; $('#cross').style.display = 'none';
-    const dir = new THREE.Vector3(); camera.getWorldDirection(dir); orbit.target.copy(camera.position).addScaledVector(dir, 3).setY(0); opt.mode = 'orbit'; syncModeBtns(); }
+    const dir = new THREE.Vector3(); camera.getWorldDirection(dir); orbit.target.copy(camera.position).addScaledVector(dir, 3).setY(0); opt.mode = 'orbit'; syncModeBtns(); applyFov(); }
   fly = null; orbit.enabled = false; showLabels(false); stage.classList.add('animating');
   const A = curPose(), B = planPose();
   await animate(1300, t => {
@@ -2629,7 +2629,7 @@ function bindJoystick(){
 }
 function setMode(m){
   if (anim) return;
-  opt.mode = m; syncModeBtns();
+  opt.mode = m; syncModeBtns(); applyFov();
   if (m === 'walk'){
     window.select(null);
     if (opt.cut < H){ opt.cut = H; syncCutBtns(); sync(); }
@@ -2647,6 +2647,11 @@ function setMode(m){
   }
   showLabels(opt.labels && m === 'orbit');
   archUp.traverse(o => { if (o.userData.walkOnly) o.visible = m === 'walk'; });
+}
+// 漫游用接近人眼的广角：横向视野约 90°，竖向限制在 60°~95°（竖屏手机也不至于像长焦）；鸟瞰保持 45°
+function applyFov(){
+  camera.fov = opt.mode === 'walk' ? THREE.MathUtils.clamp(2*Math.atan(1/camera.aspect)*180/Math.PI, 60, 95) : FOV;
+  camera.updateProjectionMatrix();
 }
 function blocked(x, z, r = .22){
   for (const [x0, z0, x1, z1] of colliders) if (x > x0 - r && x < x1 + r && z > z0 - r && z < z1 + r) return true;
