@@ -1,0 +1,6 @@
+// Cloudflare Workers 静态站点配置：整个仓库根目录作为静态资源发布（排除项见 .assetsignore）
+{
+  "name": "floorplan-3d",
+  "compatibility_date": "2025-10-01",
+  "assets": { "directory": "./" }
+}
