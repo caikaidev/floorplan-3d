@@ -49,7 +49,12 @@ python3 -m http.server 8000
 
 ## 部署
 
-纯静态站点，可直接部署到 Cloudflare Pages：连接本仓库，框架预设选 None，构建命令留空，输出目录填 `/`。绑定自己的域名可避开 `pages.dev` 在国内的访问问题。
+纯静态站点，可部署到 Cloudflare：
+
+- **Workers（新版默认流程）**：导入本仓库，构建命令留空，部署命令保持 `npx wrangler deploy`。仓库里的 `wrangler.jsonc` 会把根目录作为静态资源发布，`.assetsignore` 排除 `.git` 等非网页文件。
+- **Pages**：连接本仓库，框架预设选 None，构建命令留空，输出目录填 `/`。
+
+绑定自己的域名可避开 `pages.dev` 在国内的访问问题。
 
 ## 快捷键
 
