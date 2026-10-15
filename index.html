@@ -175,6 +175,28 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
 #joy i{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(255,253,249,.92);
   box-shadow:0 2px 8px rgba(0,0,0,.25);pointer-events:none}
 #walkExit{position:absolute;right:16px;bottom:28px;z-index:3;display:none}
+#walkScale{position:absolute;right:12px;bottom:12px;z-index:2;display:none;max-width:80%;padding:5px 10px;border-radius:8px;background:rgba(255,253,249,.92);font-size:12px;pointer-events:none}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:20px;max-width:calc(100vw - 24px);max-height:90dvh;overflow:auto}
+dialog::backdrop{background:rgba(30,28,25,.45)}
+.dialog-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}
+.dialog-head h2{font-size:18px;margin:0}
+#viewSettings{width:520px}
+#cabinetEditor{width:1000px}
+.cab-layout{display:grid;grid-template-columns:minmax(240px,1fr) minmax(300px,1fr);gap:24px}
+.cab-preview{text-align:center}
+.cab-preview svg{width:100%;max-height:55dvh;display:block;overflow:visible}
+.cab-preview svg text{font-size:12px;fill:var(--ink);pointer-events:none}
+.cab-preview svg .cab-dimension{font-size:11px;fill:#536a61}
+.cab-preview [data-bay]{cursor:pointer;outline-color:var(--accent)}
+.cab-controls{max-height:68dvh;overflow:auto;padding-right:8px}
+.cab-controls h3{margin:14px 0 8px}
+.cab-controls p,.cab-preview p{font-size:12px}
+.cab-controls form{border-bottom:1px solid var(--line);padding-bottom:16px}
+#cabError,#viewError{color:#a33324;min-height:20px}
+#cabError{position:sticky;bottom:0;background:var(--panel)}
+.cab-warning{color:#a33324}
+#plan.tool-stand{cursor:crosshair}
+@media(max-width:700px){.cab-layout{grid-template-columns:1fr}.cab-controls{max-height:none;overflow:visible}.cab-preview svg{max-height:38dvh}dialog{padding:14px}.cab-preview{border-bottom:1px solid var(--line)}}
 /* ---------- 触屏：加大点击区域 ---------- */
 @media (pointer:coarse){
   body{font-size:14px}
@@ -221,9 +243,9 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
 </style>
 <script>
 // Three.js 放在仓库 vendor/ 下，部署后全部从自己的域名加载（不依赖海外 CDN）；
-// 直接双击打开（file://）时浏览器不允许加载本地模块，退回 jsDelivr CDN
+// All modules are served from this static site. Use HTTP for browser module loading.
 (() => {
-  const base = location.protocol === 'file:' ? 'https://cdn.jsdelivr.net/npm/three@0.160.0/' : new URL('vendor/three/', location.href).href;
+  const base = new URL('vendor/three/', location.href).href;
   const im = document.createElement('script'); im.type = 'importmap';
   im.textContent = JSON.stringify({imports:{'three':base + 'build/three.module.js', 'three/addons/':base + 'examples/jsm/'}});
   document.currentScript.after(im);
@@ -246,6 +268,7 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
     <div class="grp only2d" id="tools">
       <button class="btn on" data-tool="select" title="选择 / 移动 (V)" data-en-title="Select / Move (V)" data-en="Select">选择</button>
       <button class="btn" data-tool="measure" title="测量 (M)" data-en-title="Measure (M)" data-en="Measure">测量</button>
+      <button class="btn" data-tool="stand" data-en="Stand here">选点漫游</button>
       <button class="btn" data-tool="demolish" title="拆改非承重墙 (X)" data-en-title="Demolish non-bearing walls (X)" data-en="Demolish">拆改墙体</button>
     </div>
     <div class="grp only2d">
@@ -277,7 +300,7 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
       <button class="btn chip on" data-layer="wallSnap" title="拖动家具时贴墙吸附" data-en-title="Snap furniture to walls while dragging" data-en="Wall snap">贴墙吸附</button>
     </div>
     <div class="grp only3d">
-      <button class="btn chip on" data-cut="2.4" data-en="Full walls">全高墙</button>
+      <button class="btn chip on" data-cut="full" data-en="Full walls">全高墙</button>
       <button class="btn chip" data-cut="1.2" data-en="Cut walls">剖切墙</button>
     </div>
     <div class="grp only3d" id="toggles3d">
@@ -287,6 +310,7 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
     </div>
     <div class="grp only3d"><label class="range"><span data-en="Sun">日照</span> <input type="range" id="sun" min="7" max="18" step=".25" value="10" style="width:84px"><span id="sunT">10:00</span></label></div>
     <div class="spacer"></div>
+    <button class="btn" id="viewSettingsBtn" data-en="View calibration">视角校准</button>
     <button class="btn" id="langBtn" title="Switch language / 切换语言" style="border:1px solid var(--line);background:#fff">EN</button>
     <button class="btn" id="fullscreen" title="全屏 (Shift+F)" style="border:1px solid var(--line);background:#fff">⛶ 全屏</button>
     <details class="menu"><summary class="btn" data-en="File ▾">文件 ▾</summary>
@@ -329,6 +353,7 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
       <div id="joy"><i></i></div>
       <button class="btn primary" id="walkExit" data-en="Exit walk">退出漫游</button>
       <div id="hint3d"></div>
+      <div id="walkScale" aria-live="off"></div>
     </div>
     <div class="scalebar" id="scalebar"><span id="sbText">1 m</span><div class="bar" id="sbBar"></div></div>
     <div class="modehint" id="modehint"></div>
@@ -348,6 +373,11 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
   </footer>
 </div>
 <div id="toast"></div>
+<dialog id="viewSettings" aria-label="视角校准 / View calibration"></dialog>
+<dialog id="cabinetEditor" aria-label="柜内设计 / Cabinet interior"></dialog>
+<script src="design.js"></script>
+<script src="cabinet-editor.js"></script>
+<script src="view-settings.js"></script>
 
 <script>
 /* ======================= 多语言（中文 / English，默认中文） ======================= */
@@ -498,7 +528,11 @@ const typeColor = t => { for (const c of LIB) for (const i of c.items) if (i[0]=
 
 let _n = 1;
 const uid = () => 'f' + Date.now().toString(36) + (_n++);
-const F = (type,name,cx,cy,w,d,rot=0,color) => ({id:uid(),type,name,cx,cy,w,d,rot,color:color||typeColor(type)});
+const F = (type,name,cx,cy,w,d,rot=0,color) => {
+  const f = {id:uid(),type,name,cx,cy,w,d,rot,color:color||typeColor(type)};
+  if (HomeDesign.isCabinet(f)) f.cabinet = HomeDesign.defaultCabinet(f);
+  return f;
+};
 
 function defaultFurniture(){ return [
   // 主卧
@@ -538,18 +572,32 @@ function defaultFurniture(){ return [
 
 function defaultState(){
   const rooms = {}; ROOMS.forEach(r => rooms[r.id] = {name:r.name, mat:r.mat});
-  return {furniture:defaultFurniture(), rooms, demolished:[], measures:[]};
+  return {version:3, view:HomeDesign.defaults(), furniture:defaultFurniture(), rooms, demolished:[], measures:[]};
 }
 
-const STORE = 'huxing-design-v2';
+const STORE = 'huxing-design-v3', LEGACY_STORE = 'huxing-design-v2';
 function load(){
-  try { const s = JSON.parse(localStorage.getItem(STORE)); if (s && Array.isArray(s.furniture)) return fixState(s); } catch(e) {}
+  try { const s = JSON.parse(localStorage.getItem(STORE) || localStorage.getItem(LEGACY_STORE)); if (s && Array.isArray(s.furniture)) return fixState(s); } catch(e) {}
   return null;
 }
 function fixState(s){
+  if (!s || (s.version && s.version > 3) || !Array.isArray(s.furniture) || s.furniture.length > 500) throw Error('Unsupported plan');
   const d = defaultState();
   s.rooms = Object.assign(d.rooms, s.rooms || {});
-  s.demolished = s.demolished || []; s.measures = s.measures || [];
+  for (const r of ROOMS) if (!s.rooms[r.id] || typeof s.rooms[r.id].name !== 'string' || !Object.hasOwn(MATS,s.rooms[r.id].mat)) throw Error('Invalid room');
+  const ids = new Set();
+  s.furniture = s.furniture.map(f => {
+    if (!f || typeof f.id !== 'string' || ids.has(f.id) || typeof f.name !== 'string' || !LIB.some(c=>c.items.some(i=>i[0]===f.type))) throw Error('Invalid furniture');
+    ids.add(f.id);
+    for (const k of ['cx','cy','w','d','rot']) if (!Number.isFinite(f[k]) || Math.abs(f[k])>100000) throw Error('Invalid dimensions');
+    if (f.w<50 || f.d<50 || f.w>10000 || f.d>10000 || !/^#[\da-f]{6}$/i.test(f.color)) throw Error('Invalid furniture');
+    if (HomeDesign.isCabinet(f)) f.cabinet = HomeDesign.validateCabinet(f, f.cabinet || HomeDesign.defaultCabinet(f));
+    return f;
+  });
+  s.demolished = Array.isArray(s.demolished) ? s.demolished.filter(id=>/^w\d+$/.test(id) && WALLS[+id.slice(1)]) : [];
+  s.measures = Array.isArray(s.measures) ? s.measures : [];
+  if (s.measures.length>1000 || s.measures.some(m=>!m || ![m.a?.x,m.a?.y,m.b?.x,m.b?.y].every(Number.isFinite))) throw Error('Invalid measures');
+  s.version = 3; s.view = HomeDesign.viewSettings(s.view);
   return s;
 }
 
@@ -1039,7 +1087,7 @@ function roomPanel(r){
       <div><small>${tr('周长','Perimeter')}</small><span class="big">${fmt(perim(r.poly),1)}</span> m</div>
       <div><small>${tr('开间','Width')}</small><span class="big">${x1-x0}</span> mm</div>
       <div><small>${tr('进深','Depth')}</small><span class="big">${y1-y0}</span> mm</div></div>
-    <div class="muted">${tr(`墙面面积（净高 2.4m，未扣门窗）约 ${fmt(perim(r.poly)*2.4,1)} m²`, `Wall area (2.4m ceiling, openings not deducted) ≈ ${fmt(perim(r.poly)*2.4,1)} m²`)}</div></section>
+    <div class="muted">${tr(`墙面面积（净高 ${state.view.ceilingHeight/1000}m，未扣门窗）约 ${fmt(perim(r.poly)*state.view.ceilingHeight/1000,1)} m²`, `Wall area (${state.view.ceilingHeight/1000}m ceiling, openings not deducted) ≈ ${fmt(perim(r.poly)*state.view.ceilingHeight/1000,1)} m²`)}</div></section>
   <section><h3>${tr('地面材料','Flooring')}</h3><div class="mats">${mats}</div>
     <div class="total"><span>${tr('材料估价','Estimated cost')}</span><b>¥${Math.round(a*MATS[st.mat].price*1.05).toLocaleString()}</b></div></section>
   <section><h3>${tr('房间内家具','Furniture in room')} <small>${tr(`${inside.length} 件`, `${inside.length} items`)}</small></h3>
@@ -1071,8 +1119,8 @@ function furnPanel(f){
   return `<section><h3>${tr('家具属性','Furniture')}</h3>
     <div class="form">
       <label class="full">${tr('名称','Name')}<input id="fName" value="${esc(nm(f.name))}"></label>
-      <label>${tr('宽','Width')} (mm)<input type="number" id="fW" value="${f.w}" min="50" step="10"></label>
-      <label>${tr('深','Depth')} (mm)<input type="number" id="fD" value="${f.d}" min="50" step="10"></label>
+      <label>${tr('宽','Width')} (mm)<input type="number" id="fW" value="${f.w}" min="50" step="10" ${HomeDesign.isCabinet(f)?'disabled':''}></label>
+      <label>${tr('深','Depth')} (mm)<input type="number" id="fD" value="${f.d}" min="50" step="10" ${HomeDesign.isCabinet(f)?'disabled':''}></label>
       <label>${tr('中心','Center')} X (mm)<input type="number" id="fX" value="${Math.round(f.cx)}" step="10"></label>
       <label>${tr('中心','Center')} Y (mm)<input type="number" id="fY" value="${Math.round(f.cy)}" step="10"></label>
       <label>${tr('旋转','Rotation')} (°)<input type="number" id="fR" value="${f.rot}" step="15"></label>
@@ -1084,9 +1132,10 @@ function furnPanel(f){
       <button class="btn" id="aTop">${tr('置于顶层','Bring to front')}</button><button class="btn" id="aBot">${tr('置于底层','Send to back')}</button>
       <button class="btn danger" id="aDel">${tr('删除','Delete')}</button><button class="btn" id="back">${tr('← 返回','← Back')}</button>
     </div></section>
-  <section class="muted" style="font-size:12px">${tr('拖动家具移动；拖动上方圆点旋转；拖动右下角方块调整尺寸。开启「贴墙吸附」后靠近墙面会自动贴齐。', 'Drag to move; drag the top dot to rotate; drag the bottom-right square to resize. With "Wall snap" on, items snap flush to nearby walls.')}</section>`;
+  ${cabinetPanel(f)}<section class="muted" style="font-size:12px">${HomeDesign.isCabinet(f)?tr('柜体尺寸请在「编辑内部布局」中解锁修改。','Unlock cabinet dimensions in the interior editor.'):tr('拖动家具移动；拖动上方圆点旋转；拖动右下角方块调整尺寸。开启「贴墙吸附」后靠近墙面会自动贴齐。', 'Drag to move; drag the top dot to rotate; drag the bottom-right square to resize. With "Wall snap" on, items snap flush to nearby walls.')}</section>`;
 }
 function bindFurnPanel(f){
+  bindCabinetPanel(f);
   const upd = (fn) => mutate(() => { const g = getF(f.id); if (g) fn(g); });
   const num = (id, fn) => $(id).onchange = e => { const v = parseFloat(e.target.value); if (!isNaN(v)) upd(g => fn(g, v)); };
   $('#fName').onchange = e => upd(g => g.name = e.target.value.trim() || g.name);
@@ -1108,7 +1157,7 @@ function rotateSel(d){ if (ui.sel?.kind==='furn') mutate(() => { const f = getF(
 function deleteSel(){ if (ui.sel?.kind==='furn'){ const id = ui.sel.id; ui.sel = null; mutate(() => state.furniture = state.furniture.filter(f => f.id !== id)); } }
 function duplicateSel(){
   if (ui.sel?.kind !== 'furn') return;
-  const f = getF(ui.sel.id), n = {...f, id:uid(), cx:f.cx+200, cy:f.cy+200};
+  const f = getF(ui.sel.id), n = {...structuredClone(f), id:uid(), cx:f.cx+200, cy:f.cy+200};
   ui.sel = {kind:'furn', id:n.id}; mutate(() => state.furniture.push(n));
 }
 // 新放下的家具若压在墙 / 窗上，沿穿透较浅的方向推出来，刚好贴墙
@@ -1149,7 +1198,7 @@ function setTool(t){
   renderMeasure();
 }
 function syncModeHint(){
-  const hints = {select:'',
+  const hints = {select:'', stand:tr('点击室内空地，按校准眼高和朝向进入漫游 · Esc 取消','Click free floor space to start at your calibrated eye height and heading · Esc cancels'),
     measure:COARSE ? tr('按住拖出测量线，或依次点两点 · 靠近墙面自动吸附 · 点「选择」退出', 'Hold and drag a line, or tap two points · snaps to walls · tap "Select" to exit')
       : tr('点击两点（或按住拖动）测量距离 · 靠近墙面自动吸附 · Shift 锁定水平/垂直 · Esc 取消', 'Click two points (or drag) to measure · snaps to walls · Shift locks horizontal/vertical · Esc cancels'),
     demolish:tr('点击灰色非承重墙标记拆除，再次点击恢复 · 黑色承重墙不可拆', 'Click a grey non-bearing wall to remove it, click again to restore · black bearing walls cannot be removed')};
@@ -1252,6 +1301,7 @@ svg.addEventListener('pointerdown', e => {
   }
   if (pinch) return;
   const p = toMM(e), t = e.target;
+  if (ui.tool === 'stand') { touches.clear(); window.View3D?.standAt(p); return; }
   if (ui.tool === 'measure'){
     const q = snapPoint(p, e.shiftKey);
     if (!ui.mA){ ui.mA = q; ui.mCur = q; drag = {kind:'measure', sx:e.clientX, sy:e.clientY, moved:false}; svg.setPointerCapture(e.pointerId); }
@@ -1260,6 +1310,7 @@ svg.addEventListener('pointerdown', e => {
   }
   const h = t.closest('[data-handle]');
   if (h && ui.sel?.kind === 'furn'){
+    if (h.dataset.handle === 'size' && HomeDesign.isCabinet(getF(ui.sel.id))) { toast(tr('请在柜内编辑器中修改外尺寸','Resize cabinets in the interior editor')); return; }
     drag = {kind:h.dataset.handle, id:ui.sel.id, sx:e.clientX, sy:e.clientY, before:snap(), moved:false};
   } else if (ui.tool === 'demolish' && t.closest('[data-wall]')){
     toggleWall(t.closest('[data-wall]').dataset.wall); return;
@@ -1340,7 +1391,7 @@ svg.addEventListener('contextmenu', e => { if (ui.tool==='measure'){ e.preventDe
 
 /* ======================= 键盘 ======================= */
 document.addEventListener('keydown', e => {
-  if (e.target.matches('input,select,textarea')) return;
+  if (e.target.matches('input,select,textarea') || document.querySelector('dialog[open]')) return;
   if (window.View3D?.walking()) return;
   const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
   if (mod && k === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
@@ -1467,6 +1518,7 @@ const TIPS = () => COARSE
      '3d':tr('3D 场景与平面方案实时同步 · 右侧面板修改会立即生效 · T 返回 2D', '3D stays in sync with the plan · panel edits apply instantly · T for 2D')};
 async function setView(m){
   if (m === viewMode || switching) return;
+  if (m === '3d' && location.protocol === 'file:') return toast(tr('请通过 HTTP 静态服务器或已部署网站打开 3D','Open the app through an HTTP server or deployed website for 3D'));
   if (!window.View3D) return toast(tr('3D 引擎仍在加载或加载失败（需要联网加载 three.js）', '3D engine is still loading or failed to load (three.js needs a network connection)'));
   switching = true; document.body.classList.add('busy');
   viewMode = m;
@@ -1509,6 +1561,7 @@ function syncFullscreen(){
   b.title = (on ? tr('退出全屏', 'Exit fullscreen') : tr('全屏', 'Fullscreen')) + ' (Shift+F)';
 }
 $('#fullscreen').onclick = toggleFullscreen;
+$('#viewSettingsBtn').onclick = openViewSettings;
 ['fullscreenchange', 'webkitfullscreenchange'].forEach(t => document.addEventListener(t, syncFullscreen));
 // 已从主屏幕以独立 App 方式打开时本就是全屏，隐藏按钮
 if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) $('#fullscreen').hidden = true;
@@ -1569,17 +1622,21 @@ import {PointerLockControls} from 'three/addons/controls/PointerLockControls.js'
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {CSS2DRenderer, CSS2DObject} from 'three/addons/renderers/CSS2DRenderer.js';
+import {buildCabinet} from './cabinet-model.js';
 
 const stage = $('#stage'), host = $('#view3d');
-const OX = 5100, OY = 5850, H = 2.4, FOV = 45, BAY_H = .55;   // 户型中心放在世界原点，吊顶后净高 2.4 m，飘窗台高 0.55 m
+let H = state.view.ceilingHeight/1000;
+const OX = 5100, OY = 5850, FOV = 45, BAY_H = .55;   // 户型中心放在世界原点，吊顶后净高 2.4 m，飘窗台高 0.55 m
 const wx = x => (x - OX) / 1000, wz = y => (y - OY) / 1000, M = v => v / 1000;
 const SW = () => stage.clientWidth, SH = () => stage.clientHeight;
-const opt = {cut:2.4, furn:true, labels:true, night:false, hour:10, mode:'orbit'};
+const opt = {cut:H, furn:true, labels:true, night:false, hour:10, mode:'orbit'};
 
 let inited = false, active = false, raf = 0, anim = null, fly = null;
 let renderer, labelRenderer, scene, camera, orbit, walkCtl, hemi, sun, ground, glassMat, wallMat, capMat, frameMat;
 let archFloor, archUp, furnG, labelG, lampG, colliders = [], selKey = null, selHelper = null;
 let sigArch = '', sigFurn = '', sigLabels = '', grow = 1, furnGrow = 1;
+let walkRects = [], lastWalkHud = 0, lastViewSettings = '';
+const clearKeys = () => { for (const key of Object.keys(keys)) keys[key] = false; };
 const doors = [], keys = {};
 
 /* ======================= 初始化 ======================= */
@@ -1602,7 +1659,7 @@ function init(){
   orbit.enableDamping = true; orbit.maxPolarAngle = Math.PI*.495; orbit.minDistance = 1.5; orbit.maxDistance = 45;
   walkCtl = new PointerLockControls(camera, document.body);
   walkCtl.addEventListener('lock', () => { $('#walkOverlay').style.display = 'none'; $('#cross').style.display = 'block'; });
-  walkCtl.addEventListener('unlock', () => { if (opt.mode === 'walk'){ $('#walkOverlay').style.display = 'flex'; $('#cross').style.display = 'none'; } });
+  walkCtl.addEventListener('unlock', () => { clearKeys(); if (opt.mode === 'walk'){ $('#walkOverlay').style.display = 'flex'; $('#cross').style.display = 'none'; } });
 
   hemi = new THREE.HemisphereLight(0xfff8ee, 0xb9a88f, 1.1);
   sun = new THREE.DirectionalLight(0xfff1dd, 2.6);
@@ -1891,34 +1948,8 @@ function buildFurniture(f){
       g.add(box(.16, .025, .22, '#2f5d62', w*.24, .5, .04), box(.14, .02, .2, '#e6dccd', w*.24, .525, .04));
       break;
     }
-    case 'wardrobe': case 'tallcab': case 'cabinet': case 'shoecab': {
-      const cm = mat(c, {roughness:.55}), fz = d/2 - .02;
-      if (f.type === 'wardrobe' || f.type === 'tallcab'){
-        const h = f.type === 'tallcab' ? H - .005 : 2.2, n = Math.max(1, Math.round(w/.5));
-        g.add(box(w - .02, .08, d - .06, '#4a4641', 0, 0, -.03), box(w, h - .08, d - .02, cm, 0, .08, -.01));
-        fronts(g, -w/2, .08, w, h - .1, fz, n, 1, cm, 'bar', 1.05);
-        g.add(box(w, .02, d - .02, darker(c, .9), 0, h - .02, -.01));
-      } else if (f.type === 'shoecab'){
-        const h = 1.0, y0 = .16, n = Math.max(1, Math.round(w/.45));
-        g.add(box(w, h - y0, d - .02, cm, 0, y0, -.01), box(w - .04, .01, .03, glowMat('#fff7e6', '#ffe9c4', .8), 0, y0 - .01, fz - .06));   // 悬空 + 底部灯带
-        fronts(g, -w/2, y0, w, h - y0, fz, n, 1, cm, 'edge');
-        g.add(rbox(w + .01, .025, d, woodM(darker(c, .8)), 0, h, 0, .006));
-        g.add(rbox(.22, .015, .14, woodM('#6b543f'), -w*.25, h + .025, 0, .006));
-        vase(g, w*.28, h + .025, -.03, .05, .2, '#d8cfc2', R);
-      } else {
-        const h = .85, n = Math.max(1, Math.round(w/.5));
-        legs(g, w, d, .1, woodM('#3a3027'), .05, .016);
-        g.add(box(w, h - .13, d - .02, cm, 0, .1, -.01));
-        fronts(g, -w/2, .62, w, .2, fz, n, 1, cm, 'bar');
-        fronts(g, -w/2, .1, w, .52, fz, n, 1, cm, 'bar', .52);
-        g.add(rbox(w + .02, .03, d + .01, woodM(darker(c, .78)), 0, h - .03, 0, .008));
-        vase(g, w*.3, h, 0, .07, .24, '#e9e2d6', R);
-        g.add(rot(box(.3, .38, .02, woodM('#3a3027'), -w*.25, h, bz + .06), -.12), rot(box(.25, .33, .005, '#d9cfbf', -w*.25, h + .03, bz + .075), -.12));   // 靠墙画框
-        g.add(lathe([[0, 0], [.05, 0], [.12, .06], [.13, .07]], mat('#b8a58c', {roughness:.5, side:THREE.DoubleSide}), 0, h, .02, 32));
-        for (let k = 0; k < 3; k++) g.add(blob(.035, .035, .035, ['#d98c4a', '#c9ad4f', '#b5463a'][k], Math.cos(k*2.1)*.04, h + .045, .02 + Math.sin(k*2.1)*.04, 14));
-      }
-      break;
-    }
+    case 'wardrobe': case 'tallcab': case 'cabinet': case 'shoecab':
+      g.add(buildCabinet(f, {THREE, box, mat, rod, metal})); break;
     case 'dresser': {
       const wm = woodM(c), r = Math.min(.34, w*.3);
       [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a, b]) => g.add(rod([a*(w/2 - .04), 0, b*(d/2 - .04)], [a*(w/2 - .05), .58, b*(d/2 - .05)], .012, wm, .02)));
@@ -2392,7 +2423,7 @@ function buildArch(){
     const leaf = box(L, dh, .04, mat(d.entry ? '#6b4f3a' : '#efe6d8', {roughness:.5}), L/2);
     const knob = new THREE.Mesh(new THREE.SphereGeometry(.03, 12, 8), metal()); knob.position.set(L - .07, Math.min(1, dh - .05), 0); knob.scale.z = 2.2;
     pivot.add(leaf, knob);
-    const ang = v => Math.atan2(-v[1], v[0]), door = {pivot, a0:ang(d.c), a1:ang(d.o), open:true};
+    const ang = v => Math.atan2(-v[1], v[0]), door = {pivot, length:d.len, a0:ang(d.c), a1:ang(d.o), open:true};
     if (door.a1 - door.a0 > Math.PI) door.a1 -= Math.PI*2; if (door.a0 - door.a1 > Math.PI) door.a1 += Math.PI*2;
     door.cur = door.a1; pivot.rotation.y = door.cur; leaf.userData.door = knob.userData.door = door;
     doors.push(door); archUp.add(pivot);
@@ -2436,10 +2467,26 @@ function buildLabels(){
 // 只重建变化的部分
 function sync(force){
   if (!inited || (!active && !force)) return;
-  const a = JSON.stringify([state.rooms, state.demolished, opt.cut, ui.focus]), f = JSON.stringify([state.furniture, ui.focus]), l = JSON.stringify([state.rooms, opt.cut, ui.focus]);
+  const nextH=state.view.ceilingHeight/1000;
+  if(opt.cut===H || opt.mode==='walk') opt.cut=nextH;
+  H=nextH; syncCutBtns();
+  const a = JSON.stringify([state.rooms, state.demolished, opt.cut, ui.focus, H]), f = JSON.stringify([state.furniture, ui.focus]), l = JSON.stringify([state.rooms, opt.cut, ui.focus]);
+  const settings=JSON.stringify(state.view), changed=force || a!==sigArch || f!==sigFurn || settings!==lastViewSettings;
   if (force || a !== sigArch){ sigArch = a; buildArch(); }
   if (force || f !== sigFurn){ sigFurn = f; buildFurn(); }
   if (force || l !== sigLabels){ sigLabels = l; buildLabels(); }
+  if(changed) {
+    rebuildWalkRects(); applyFov(); lastViewSettings=settings;
+    if(opt.mode==='walk') {
+      camera.position.y=M(state.view.eyeHeight);
+      if(blocked(camera.position.x,camera.position.z)) {
+        const point=nearestStandingPoint({x:camera.position.x*1000+OX,y:camera.position.z*1000+OY});
+        if(point) {camera.position.x=wx(point.x);camera.position.z=wz(point.y);}
+        else {pauseWalk();setMode('orbit');}
+      }
+    }
+  }
+  showLabels(opt.labels && opt.mode==='orbit' && !anim);
 }
 
 // CSS2DRenderer 只看标签自身的 visible，不继承父级，所以逐个设置
@@ -2529,7 +2576,7 @@ async function enter(){
   stage.classList.remove('animating');
 }
 async function exit(){
-  if (opt.mode === 'walk'){ walkCtl.unlock(); stopTouchWalk(); $('#hint3d').textContent = HINT_ORBIT; $('#walkOverlay').style.display = 'none'; $('#cross').style.display = 'none';
+  if (opt.mode === 'walk'){ walkCtl.unlock(); stopTouchWalk(); $('#walkScale').style.display='none'; $('#hint3d').textContent = HINT_ORBIT(); $('#walkOverlay').style.display = 'none'; $('#cross').style.display = 'none';
     const dir = new THREE.Vector3(); camera.getWorldDirection(dir); orbit.target.copy(camera.position).addScaledVector(dir, 3).setY(0); opt.mode = 'orbit'; syncModeBtns(); applyFov(); }
   fly = null; orbit.enabled = false; showLabels(false); stage.classList.add('animating');
   const A = curPose(), B = planPose();
@@ -2627,7 +2674,7 @@ function bindJoystick(){
   const end = e => { if (e.pointerId !== joy.id) return; joy.id = null; joy.x = joy.y = 0; knob.style.transform = ''; };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
 }
-function setMode(m){
+function setMode(m, standingPoint){
   if (anim) return;
   opt.mode = m; syncModeBtns(); applyFov();
   if (m === 'walk'){
@@ -2635,12 +2682,17 @@ function setMode(m){
     if (opt.cut < H){ opt.cut = H; syncCutBtns(); sync(); }
     orbit.enabled = false; fly = null;
     const fr = focusScope()?.room;
-    if (fr){ const [x0, y0, x1, y1] = bbox(fr.poly), [ax, ay] = fr.at || [(x0+x1)/2, (y0+y1)/2]; camera.position.set(wx(ax), 1.6, wz(ay)); camera.lookAt(wx((x0+x1)/2), 1.2, wz(y0)); }
-    else { camera.position.set(wx(8400), 1.6, wz(4840)); camera.lookAt(wx(5000), 1.5, wz(4840)); }   // 入户门外（电梯厅）
+    const desired = standingPoint || (fr ? {x:fr.at?.[0] ?? (bbox(fr.poly)[0]+bbox(fr.poly)[2])/2, y:fr.at?.[1] ?? (bbox(fr.poly)[1]+bbox(fr.poly)[3])/2} : {x:8400,y:4840});
+    const point = standingPoint ? (!blocked(wx(desired.x),wz(desired.y)) && desired) : nearestStandingPoint(desired);
+    if (!point) { opt.mode='orbit'; orbit.enabled=true; syncModeBtns(); applyFov(); toast(tr('没有足够的站立空间，请调整布置或通行宽度','No standing clearance; adjust furniture or body width')); return false; }
+    camera.position.set(wx(point.x), M(state.view.eyeHeight), wz(point.y));
+    const heading=state.view.heading*Math.PI/180;
+    camera.lookAt(camera.position.x+Math.sin(heading),camera.position.y,camera.position.z-Math.cos(heading));
+    $('#walkExit').style.display='block'; $('#walkScale').style.display='block'; clearKeys();
     $('#walkOverlay').style.display = 'flex';
     syncHint3d();
   } else {
-    walkCtl.unlock(); stopTouchWalk(); orbit.enabled = true;
+    walkCtl.unlock(); stopTouchWalk(); orbit.enabled = true; $('#walkScale').style.display='none'; clearKeys();
     $('#walkOverlay').style.display = 'none'; $('#cross').style.display = 'none';
     syncHint3d();
     orbit.target.set(0, 0, 0); flyTo(homePose());
@@ -2648,22 +2700,55 @@ function setMode(m){
   showLabels(opt.labels && m === 'orbit');
   archUp.traverse(o => { if (o.userData.walkOnly) o.visible = m === 'walk'; });
 }
-// 漫游用接近人眼的广角：横向视野约 90°，竖向限制在 60°~95°（竖屏手机也不至于像长焦）；鸟瞰保持 45°
+// Keep the calibrated horizontal FOV at every aspect ratio; do not clamp the derived vertical FOV.
 function applyFov(){
-  camera.fov = opt.mode === 'walk' ? THREE.MathUtils.clamp(2*Math.atan(1/camera.aspect)*180/Math.PI, 60, 95) : FOV;
+  camera.fov = opt.mode === 'walk' ? HomeDesign.verticalFov(state.view.horizontalFov, camera.aspect) : FOV;
   camera.updateProjectionMatrix();
 }
-function blocked(x, z, r = .22){
-  for (const [x0, z0, x1, z1] of colliders) if (x > x0 - r && x < x1 + r && z > z0 - r && z < z1 + r) return true;
-  for (const d of doors){
-    const a = d.pivot.rotation.y, px = d.pivot.position.x, pz = d.pivot.position.z, ex = px + Math.cos(a)*.9, ez = pz - Math.sin(a)*.9;
-    const t = clamp01(((x-px)*(ex-px) + (z-pz)*(ez-pz)) / ((ex-px)**2 + (ez-pz)**2));
-    if (Math.hypot(x - (px + t*(ex-px)), z - (pz + t*(ez-pz))) < r*.8) return true;
+function doorRect(d, angle = d.pivot.rotation.y) {
+  return {cx:d.pivot.position.x*1000+OX+Math.cos(angle)*d.length/2, cy:d.pivot.position.z*1000+OY-Math.sin(angle)*d.length/2, w:d.length, d:40, rot:-angle*180/Math.PI};
+}
+function walkObstacles() { return walkRects.concat(doors.map(d=>doorRect(d))); }
+function rebuildWalkRects() {
+  const rectangle = r => ({cx:(r[0]+r[2])/2,cy:(r[1]+r[3])/2,w:r[2]-r[0],d:r[3]-r[1],rot:0});
+  walkRects = focusWalls().filter(({i})=>!state.demolished.includes('w'+i)).map(({rect})=>rectangle(rect));
+  walkRects.push(...(focusScope()?.wins ?? WINS).map(rectangle));
+  walkRects.push(...(focusScope()?.rooms ?? ROOMS).filter(r=>r.counted===false).map(r=>rectangle(bbox(r.poly))));
+  walkRects.push(...state.furniture.filter(inFocus).flatMap(f=>HomeDesign.furnitureObstacles(f)));
+}
+function floorAt(x,y) {
+  return (focusScope()?.rooms ?? ROOMS).some(r=>r.counted!==false && inPoly(x,y,r.poly)) ||
+    [...(focusScope()?.doors ?? DOORS), ...(focusScope()?.slides ?? SLIDES)].some(({rect:r})=>x>=r[0] && x<=r[2] && y>=r[1] && y<=r[3]);
+}
+function blocked(x, z, r = state.view.bodyWidth/2000){
+  const px=x*1000+OX, py=z*1000+OY;
+  return !floorAt(px,py) || walkObstacles().some(rect=>HomeDesign.circleRect(px,py,r*1000,rect));
+}
+function nearestStandingPoint(p) {
+  if (!blocked(wx(p.x),wz(p.y))) return p;
+  for(let distance=100; distance<=4000; distance+=100) for(let angle=0;angle<Math.PI*2;angle+=Math.PI/16) {
+    const q={x:p.x+Math.cos(angle)*distance,y:p.y+Math.sin(angle)*distance};
+    if (!blocked(wx(q.x),wz(q.y))) return q;
   }
-  return false;
+  return null;
+}
+async function standAt(p) {
+  if (switching) return;
+  init(); sync(true);
+  if (blocked(wx(p.x),wz(p.y))) { toast(tr('此处无法站立：请避开家具、墙体和飘窗，并留出身体宽度','No standing clearance: avoid furniture, walls and bay windows')); return; }
+  setTool('select'); await setView('3d'); setMode('walk',p);
+}
+function pauseWalk() { if (!inited) return; clearKeys(); joy.x=joy.y=0; if(walkCtl.isLocked) walkCtl.unlock(); }
+function updateWalkHud(now) {
+  if(opt.mode!=='walk' || now-lastWalkHud<250) return; lastWalkHud=now;
+  const direction=new THREE.Vector3(); camera.getWorldDirection(direction); direction.y=0; direction.normalize();
+  const dx=-direction.z, dy=direction.x, x=camera.position.x*1000+OX, y=camera.position.z*1000+OY, obstacles=walkObstacles();
+  const distance=sign=>Math.min(...obstacles.map(r=>HomeDesign.rayRect(x,y,dx*sign,dy*sign,r)));
+  const left=distance(-1), right=distance(1), width=left+right;
+  $('#walkScale').textContent=tr(`眼高 ${state.view.eyeHeight} mm · 水平视野 ${state.view.horizontalFov}° · 横向净距 ${Number.isFinite(width)?Math.round(width)+' mm':'—'}`,`Eye ${state.view.eyeHeight} mm · HFOV ${state.view.horizontalFov}° · Crosswise clearance ${Number.isFinite(width)?Math.round(width)+' mm':'—'}`);
 }
 function stepWalk(dt){
-  if (!walkCtl.isLocked && !touchWalk) return;
+  if ((!walkCtl.isLocked && !touchWalk) || document.querySelector('dialog[open]')) return;
   const sp = (keys.ShiftLeft || keys.ShiftRight ? 2.6 : 1.4) * dt, fwd = new THREE.Vector3();
   camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
   const right = new THREE.Vector3(-fwd.z, 0, fwd.x), mv = new THREE.Vector3();
@@ -2678,20 +2763,22 @@ function stepWalk(dt){
   if (!blocked(p.x, p.z + mv.z)) p.z += mv.z;
 }
 addEventListener('keydown', e => {
-  if (!active || e.target.matches('input,select,textarea')) return;
+  if (!active || e.target.matches('input,select,textarea') || document.querySelector('dialog[open]')) return;
   keys[e.code] = true;
   if (opt.mode === 'walk' && e.code === 'KeyE'){ const h = pick(); if (h?.door && h.dist < 2.5) h.door.open = !h.door.open; }
 });
 addEventListener('keyup', e => keys[e.code] = false);
+addEventListener('blur', pauseWalk);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseWalk();});
 
 /* ======================= 工具栏 ======================= */
 function syncModeBtns(){ document.querySelectorAll('#modes3d .btn').forEach(b => b.classList.toggle('on', b.dataset.mode === opt.mode)); }
-function syncCutBtns(){ document.querySelectorAll('[data-cut]').forEach(b => b.classList.toggle('on', +b.dataset.cut === opt.cut)); }
+function syncCutBtns(){ document.querySelectorAll('[data-cut]').forEach(b => b.classList.toggle('on', (b.dataset.cut==='full'?H:+b.dataset.cut) === opt.cut)); }
 function syncWalkTexts(){
   const t = COARSE
-    ? [tr('点击开始，从入户门进入', 'Tap to start at the front door'), tr('左下摇杆移动 · 在画面上拖动转向', 'Joystick moves · drag on screen to look'),
+    ? [tr('点击开始，从当前站位漫游', 'Tap to walk from this position'), tr('左下摇杆移动 · 在画面上拖动转向', 'Joystick moves · drag on screen to look'),
        tr('点门开关 · 点「退出漫游」回到鸟瞰', 'Tap doors to open · "Exit walk" returns to orbit')]
-    : [tr('点击开始，从入户门进入', 'Click to start at the front door'),
+    : [tr('点击开始，从当前站位漫游', 'Click to walk from this position'),
        tr('<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> 移动 · 鼠标转向 · <kbd>Shift</kbd> 快走', '<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> move · mouse looks · <kbd>Shift</kbd> runs'),
        tr('<kbd>E</kbd> 开关正前方的门 · <kbd>Esc</kbd> 暂停', '<kbd>E</kbd> opens the door ahead · <kbd>Esc</kbd> pauses')];
   t.forEach((h, i) => $('#wo' + (i + 1)).innerHTML = h);
@@ -2707,7 +2794,7 @@ function bindUI(){
   syncWalkTexts();
   $('#vIso').onclick = () => { if (opt.mode === 'walk') setMode('orbit'); else flyTo(homePose()); };
   $('#vTop').onclick = () => { if (opt.mode === 'walk') setMode('orbit'); flyTo(topWhole()); };
-  document.querySelectorAll('[data-cut]').forEach(b => b.onclick = () => { if (opt.mode === 'walk') return; opt.cut = +b.dataset.cut; syncCutBtns(); sync(); });
+  document.querySelectorAll('[data-cut]').forEach(b => b.onclick = () => { if (opt.mode === 'walk') return; opt.cut = b.dataset.cut==='full'?H:+b.dataset.cut; syncCutBtns(); sync(); });
   document.querySelectorAll('#toggles3d .btn').forEach(b => b.onclick = () => {
     const k = b.dataset.t; opt[k] = !opt[k]; b.classList.toggle('on', opt[k]);
     if (k === 'furn'){ furnG.visible = opt.furn; if (!opt.furn && ui.sel?.kind === 'furn') window.select(null); }
@@ -2727,8 +2814,13 @@ function loop(){
   else if (fly){ const t = clamp01((now - fly.t0)/fly.dur); camTween(fly.A, fly.B, ease(t)); if (t >= 1) fly = null; }
   else if (opt.mode === 'orbit') orbit.update();
   else stepWalk(dt);
-  doors.forEach(d => { const tg = d.open ? d.a1 : d.a0; d.cur += (tg - d.cur) * Math.min(1, dt*6); d.pivot.rotation.y = d.cur; });
+  doors.forEach(d => {
+    const tg=d.open?d.a1:d.a0, next=d.cur+(tg-d.cur)*Math.min(1,dt*6);
+    if(opt.mode==='walk' && HomeDesign.circleRect(camera.position.x*1000+OX,camera.position.z*1000+OY,state.view.bodyWidth/2,doorRect(d,next))) return;
+    d.cur=next; d.pivot.rotation.y=d.cur;
+  });
   updateSel();
+  updateWalkHud(now);
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
 }
@@ -2737,7 +2829,7 @@ function shot(){ const a = document.createElement('a'); a.download = tr('户型�
 
 function relang(){ syncWalkTexts(); if (inited) buildLabels(); }
 
-window.View3D = {focus:() => { if (!active) return; sync(); if (opt.mode === 'walk') setMode('orbit'); else flyTo(homePose()); }, enter, exit, relang, sync:() => sync(), shot, groundAt, flyToRoom:id => active && !anim && flyToRoom(id), walking:() => active && opt.mode === 'walk'};
+window.View3D = {standAt, pause:pauseWalk, focus:() => { if (!active) return; sync(); if (opt.mode === 'walk') setMode('orbit'); else flyTo(homePose()); }, enter, exit, relang, sync:() => sync(), shot, groundAt, flyToRoom:id => active && !anim && flyToRoom(id), walking:() => active && opt.mode === 'walk'};
 </script>
 </body>
 </html>
