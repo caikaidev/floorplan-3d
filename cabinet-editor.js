@@ -67,6 +67,7 @@ function renderCabinetEditor() {
       <p>${tr('点击分区编辑 · 数字为格口净高（mm）','Select a bay · numbers show clear opening heights (mm)')}</p>
       <label>${tr('3D 查看','3D view')} <select id="cabPreviewMode">${cabinetFrontOptions(c.front)}</select></label>
       <p class="muted">${tr('关闭面板后可在 3D 中查看。展开抽屉与柜门会占用前方通道。','Close the editor to inspect in 3D. Open doors and drawers occupy the aisle.')}</p>
+      ${drawingReference(f)}
       ${c.height>state.view.ceilingHeight?`<p class="cab-warning">${tr(`柜高超过净高 ${c.height-state.view.ceilingHeight} mm，请核对现场尺寸。`,`Cabinet exceeds the ceiling by ${c.height-state.view.ceilingHeight} mm; verify site dimensions.`)}</p>`:''}
       <button class="btn" id="cabUndo" ${undoStack.length?'':'disabled'}>${tr('撤销上一步','Undo')}</button>
     </div><div class="cab-controls"><form id="cabShell"><h3>${tr('外尺寸与板材','Dimensions and boards')}</h3>

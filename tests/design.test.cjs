@@ -1,7 +1,22 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const design = require('../design.js');
+const drawing = require('../drawing-plan.js');
 const wardrobe = () => { const f={type:'wardrobe',w:2000,d:600,cx:1550,cy:8160,rot:0}; f.cabinet=design.defaultCabinet(f); return f; };
+
+test('drawing cabinets retain valid editable interiors at low and full heights',()=>{
+  const create=()=>drawing.furniture((type,name,cx,cy,w,d,rot)=>{
+    const f={type,name,cx,cy,w,d,rot};if(design.isCabinet(f))f.cabinet=design.defaultCabinet(f);return f;
+  });
+  const first=create(), second=create();
+  for(const f of first.filter(design.isCabinet)) {
+    assert.doesNotThrow(()=>design.validateCabinet(f,f.cabinet));
+    assert.deepEqual(design.drawerDoorConflicts(f),[]);
+    f.cabinet.front='open';assert.ok(design.furnitureObstacles(f).length>1);
+    f.cabinet.columns[0].width=0;
+    assert.ok(second.find(g=>g.drawingKey===f.drawingKey).cabinet.columns[0].width>0);
+  }
+});
 
 test('horizontal FOV remains calibrated for portrait, landscape and desktop canvases',()=>{
   for(const aspect of [.35,390/554,904/774,844/225,5]) for(const horizontal of [55,80,95,100]) {

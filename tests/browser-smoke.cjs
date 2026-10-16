@@ -23,12 +23,65 @@ const root = path.join(__dirname,'..');
       const body=(await response.text()).replace('window.View3D = {',`window.__smoke = {
         snapshot:()=>({mode:opt.mode,eye:camera?.position.y,fov:camera?.fov,aspect:camera?.aspect,position:camera?.position.toArray(),direction:camera?.getWorldDirection(new THREE.Vector3()).toArray(),doors:doors.map(d=>d.length),meshes:furnG?.children.length}),
         blocked:(x,y)=>blocked(wx(x),wz(y)),
-        approach:(id)=>{const f=getF(id);camera.position.set(wx(f.cx),M(state.view.eyeHeight),wz(f.cy+f.d/2+state.view.bodyWidth/2+100));camera.lookAt(wx(f.cx),camera.position.y,wz(f.cy));touchWalk=true;keys.KeyW=true;for(let i=0;i<40;i++)stepWalk(.05);keys.KeyW=false;touchWalk=false;return {y:camera.position.z*1000+OY,min:f.cy+f.d/2+state.view.bodyWidth/2};}
+        approach:(id)=>{const f=getF(id),a=f.rot*Math.PI/180,dist=f.d/2+state.view.bodyWidth/2+100;camera.position.set(wx(f.cx-Math.sin(a)*dist),M(state.view.eyeHeight),wz(f.cy+Math.cos(a)*dist));camera.lookAt(wx(f.cx),camera.position.y,wz(f.cy));touchWalk=true;keys.KeyW=true;for(let i=0;i<40;i++)stepWalk(.05);keys.KeyW=false;touchWalk=false;return {y:HomeDesign.toLocal(camera.position.x*1000+OX,camera.position.z*1000+OY,f).y,min:f.d/2+state.view.bodyWidth/2};}
       }; window.View3D = {`);
       await route.fulfill({response,body});
     });
     await page.goto(url,{waitUntil:'networkidle'});
     assert.equal(await page.locator('#gRooms').evaluate(el=>el.children.length)>0,true);
+    const original=await page.evaluate(()=>JSON.stringify(state));
+    // Source dimensions, actual floor topology, and wall/furniture intersections.
+    const drawing=await page.evaluate(()=>{
+      const items=state.furniture.filter(f=>f.drawingKey), issues=[];
+      for(const f of items) {
+        const room=ROOMS.find(r=>r.id===DrawingPlan.reference(f).room), {hw,hh}=aabb(f);
+        for(const dx of [-hw+1,hw-1]) for(const dy of [-hh+1,hh-1]) if(!inPoly(f.cx+dx,f.cy+dy,room.poly)) issues.push(f.name+' outside room');
+        if(HomeDesign.furnitureObstacles(f).length) for(const w of WALLS) {
+          if(Math.min(f.cx+hw,w[2])-Math.max(f.cx-hw,w[0])>1 && Math.min(f.cy+hh,w[3])-Math.max(f.cy-hh,w[1])>1) issues.push(f.name+' intersects wall');
+        }
+      }
+      const solid=items.filter(f=>HomeDesign.furnitureObstacles(f).length);
+      for(let i=0;i<solid.length;i++) for(let j=i+1;j<solid.length;j++) {
+        const a=solid[i],b=solid[j],aa=aabb(a),bb=aabb(b);
+        if(Math.min(a.cx+aa.hw,b.cx+bb.hw)-Math.max(a.cx-aa.hw,b.cx-bb.hw)>1 && Math.min(a.cy+aa.hh,b.cy+bb.hh)-Math.max(a.cy-aa.hh,b.cy-bb.hh)>1) issues.push(a.name+' overlaps '+b.name);
+      }
+      const second=ROOMS.find(r=>r.id==='second');
+      return {issues,secondCount:state.furniture.filter(f=>inPoly(f.cx,f.cy,second.poly)).length,
+        kidNorth:inPoly(2000,300,ROOMS.find(r=>r.id==='kid').poly),secondSouth:inPoly(9000,9800,second.poly),
+        raised:ROOMS.filter(r=>r.counted===false).map(r=>r.id),
+        dimensions:Object.fromEntries(items.filter(HomeDesign.isCabinet).map(f=>[f.drawingKey,[f.w,f.d,f.cabinet.height]]))};
+    });
+    assert.deepEqual(drawing.issues,[]);
+    assert.equal(drawing.secondCount,0);
+    assert.equal(drawing.kidNorth,true);assert.equal(drawing.secondSouth,true);
+    assert.deepEqual(drawing.raised,['bay2']);
+    assert.deepEqual(drawing.dimensions['master-wardrobe'],[2200,600,2395]);
+    assert.deepEqual(drawing.dimensions['kid-wardrobe'],[1700,600,2395]);
+    assert.deepEqual(drawing.dimensions['living-tv-cabinet'],[2700,400,500]);
+    assert.deepEqual(drawing.dimensions['dining-sideboard'],[1700,450,850]);
+    // Existing users explicitly opt in; restore and redo cover the entire replacement.
+    const previous=await page.evaluate(()=>{
+      state.furniture.find(f=>f.drawingKey==='master-bed').cx+=40;
+      state.furniture.push(F('desk','次卧原有家具',8500,8200,1000,500));
+      state.furniture.find(f=>f.type==='fridge').color='#123456';
+      state.rooms.master.mat='walnut';state.view.eyeHeight=1710;
+      state.measures=[{a:{x:100,y:8000},b:{x:1000,y:8000}}];save();return JSON.stringify(state);
+    });
+    await page.reload({waitUntil:'networkidle'});
+    assert.equal(await page.evaluate(()=>JSON.stringify(state)),previous);
+    page.once('dialog',d=>d.dismiss());await page.click('#loadDrawingOverview');
+    assert.equal(await page.evaluate(()=>JSON.stringify(state)),previous);
+    page.once('dialog',d=>d.accept());await page.click('#loadDrawingOverview');
+    const loaded=await page.evaluate(()=>JSON.stringify(state)), restored=JSON.parse(loaded), old=JSON.parse(previous);
+    assert.equal(restored.furniture.some(f=>f.name==='次卧原有家具'),false);
+    assert.equal(restored.furniture.find(f=>f.drawingKey==='master-bed').cx,1100);
+    assert.deepEqual(restored.furniture.filter(f=>!f.drawingKey),old.furniture.filter(f=>!f.drawingKey&&f.name!=='次卧原有家具'));
+    assert.deepEqual(restored.view,old.view);assert.deepEqual(restored.rooms,old.rooms);assert.deepEqual(restored.measures,old.measures);
+    await page.click('#undo');assert.equal(await page.evaluate(()=>JSON.stringify(state)),previous);
+    await page.click('#redo');assert.equal(await page.evaluate(()=>JSON.stringify(state)),loaded);
+    await page.reload({waitUntil:'networkidle'});assert.equal(await page.evaluate(()=>JSON.stringify(state)),loaded);
+    await page.evaluate(json=>{state=JSON.parse(json);save();renderAll();},original);
+    console.log('PASS: drawing dimensions, empty second bedroom, corrected floor areas, furniture fit, opt-in replacement, preservation and undo/redo');
     // An old v2 export/local save should acquire a complete usable cabinet structure.
     await page.evaluate(()=>{const legacy=structuredClone(state);delete legacy.version;delete legacy.view;legacy.furniture.forEach(f=>delete f.cabinet);localStorage.removeItem(STORE);localStorage.setItem(LEGACY_STORE,JSON.stringify(legacy));});
     await page.reload({waitUntil:'networkidle'});
@@ -99,7 +152,7 @@ const root = path.join(__dirname,'..');
     console.log('PASS: legacy migration, cabinet editor, validation, split/merge, resizing, independent copies, undo/redo, reload and JSON round trip');
     const clickFloor=async(x,y)=>{const pos=await page.evaluate(({x,y})=>{const r=svg.getBoundingClientRect();return {x:r.left+(x-view.x0)*view.s,y:r.top+(y-view.y0)*view.s};},{x,y});await page.mouse.click(pos.x,pos.y);};
     await page.click('[data-tool="stand"]');
-    await clickFloor(1550,8160);
+    await clickFloor(3280,9980);
     await page.waitForFunction(()=>document.querySelector('#toast').textContent.includes('无法站立'));
     assert.equal(await page.evaluate(()=>viewMode),'2d');
     await clickFloor(8400,4840);
@@ -108,7 +161,8 @@ const root = path.join(__dirname,'..');
     assert.equal(camera.eye,1.72);assert.ok(Math.abs(camera.direction[1])<1e-8);
     assert.ok(Math.abs(camera.position[0]-3.3)<1e-6);
     assert.deepEqual(camera.doors,[890,900,800,890,1080]);
-    for(const [x,y] of [[1000,10130],[1550,8160],[4270,8600],[9840,7366]])assert.equal(await page.evaluate(([x,y])=>window.__smoke.blocked(x,y),[x,y]),true);
+    for(const [x,y] of [[1000,10130],[3280,9980],[4270,8600]])assert.equal(await page.evaluate(([x,y])=>window.__smoke.blocked(x,y),[x,y]),true);
+    for(const [x,y] of [[9840,7366],[9000,9800],[7100,7000]])assert.equal(await page.evaluate(([x,y])=>window.__smoke.blocked(x,y),[x,y]),false);
     const movement=await page.evaluate(id=>window.__smoke.approach(id),id);
     assert.ok(movement.y>=movement.min);assert.ok(movement.y<movement.min+100);
     for(const [width,height] of [[390,844],[844,390],[1280,800]]) {

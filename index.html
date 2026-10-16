@@ -318,6 +318,7 @@ dialog::backdrop{background:rgba(30,28,25,.45)}
         <button class="btn" id="exportPng" data-en="Export image">导出图片</button>
         <button class="btn" id="exportJson" data-en="Export plan JSON">导出方案 JSON</button>
         <button class="btn" id="importJson" data-en="Import plan">导入方案</button>
+        <button class="btn" id="loadDrawing" data-en="Load drawing layout">载入图纸布置</button>
         <button class="btn danger" id="reset" data-en="Reset to default">重置为默认方案</button>
       </div></details>
     <input type="file" id="fileIn" accept=".json,application/json" hidden>
@@ -376,6 +377,7 @@ dialog::backdrop{background:rgba(30,28,25,.45)}
 <dialog id="viewSettings" aria-label="视角校准 / View calibration"></dialog>
 <dialog id="cabinetEditor" aria-label="柜内设计 / Cabinet interior"></dialog>
 <script src="design.js"></script>
+<script src="drawing-plan.js"></script>
 <script src="cabinet-editor.js"></script>
 <script src="view-settings.js"></script>
 
@@ -419,41 +421,42 @@ function applyStaticLang(){
 }
 
 /* ============================================================
- *  户型数据（单位 mm，原点 = 主卧左墙内皮 / 儿童房飘窗内皮，y 向下为南）
- *  按原始户型图尺寸标注推算，图上未标注的墙位按比例量取（误差约 ±50mm）：
- *  下：3200/380/240/3420/240/380/2280 = 10140
- *  左：2920/120/2831/240/1629/120/3820 = 11680
- *  右：600/1041/600/1010/3000/240/3550/188/1451 = 11680
- *  三个飘窗：台面高 550，进深 600（次卧飘窗外凸，右侧距东墙 300）；吊顶后净高 2400；墙体均不可拆
+ *  户型数据（单位 mm，原点 = 主卧西墙内皮 / 儿童房北墙内皮，y 向下为南）
+ *  按 2026-10-16 附图核对：横向 10140，纵向 11680，图示净高 2400。
+ *  儿童房北侧、次卧南侧暂按连续地面；有无固定台面待现场确认。次卧东墙净进深 3550。
+ *  主卧保留南侧 600 深飘窗；台高 550 及窗台高为暂估，图纸未标注。
+ *  未注尺寸的墙位与家具摆位按图量取；承重属性未由本次平面图确认。
  * ============================================================ */
 // 墙体：[x0,y0,x1,y1,类型]  b=承重(黑) e=外墙 n=可拆非承重 low=矮墙
 const WALLS = [
   // 儿童房 / 卫生间 / 主卧 西侧外墙
-  [660,-240,900,4260,'e'],[660,4860,900,6110,'e'],[-240,5870,0,11920,'e'],
-  // 儿童房北侧、飘窗垛
-  [3200,-240,3580,600,'e'],[3580,-240,3820,1390,'e'],
+  [670,-240,910,4270,'e'],[670,4870,910,6110,'e'],[-240,5870,0,11920,'e'],
+  // 儿童房北窗与东北侧墙体转折
+  [3190,-240,3430,600,'e'],[3580,360,3820,1390,'e'],
   // 厨房
   [3820,1390,4700,1641,'e'],[5710,1390,6580,1641,'e'],[3820,1641,4370,2241,'b'],[6040,1641,6580,2241,'b'],
   [3580,1390,3820,4300,'b'],[6580,1390,6820,3010,'e'],[6580,3010,6820,4300,'b'],
   // 门厅（电梯厅）
   [6820,3010,7085,3251,'e'],[8980,3010,9510,3251,'e'],[9270,3251,9510,6251,'e'],[6580,5380,6820,6251,'b'],
   // 次卧
-  [6580,6251,9510,6491,'b'],[9510,6251,10380,6491,'e'],[10140,6491,10380,9681,'e'],
-  // 次卧南墙 + 外凸飘窗（飘窗进深 600，右侧距东墙 300）
-  [7480,9441,7860,9681,'e'],[9840,9441,10140,9681,'e'],[7740,9681,7860,10229,'e'],[9840,9681,9960,10229,'e'],
+  [6580,6251,9510,6491,'b'],[9510,6251,10380,6491,'e'],[10140,6491,10380,10161,'e'],
+  // 次卧南侧地面与窗：仅保留西南侧墙垛，不设置抬高台面
+  [7480,9441,7860,9681,'e'],[9760,10041,10140,10161,'e'],[7740,9681,7860,10161,'e'],
+  [3430,360,3580,600,'e'], // 儿童房东北墙短边；保留后续墙体 ID
   [6580,6491,7240,6640,'b'],[7240,6491,7480,6690,'b'],[7240,7580,7480,9681,'b'],[7240,9681,7480,10420,'e'],
   // 儿童房 / 卫生间 / 过道
-  [900,2920,2610,3040,'b'],[3500,2920,3580,3040,'b'],[2430,3880,2550,6800,'b'],[900,5870,2430,6110,'b'],[900,4960,1200,5870,'b'],
+  [910,2920,2610,3040,'b'],[3500,2920,3580,3040,'b'],[2430,3880,2550,6800,'b'],[910,5870,2430,6110,'b'],[910,4960,1200,5870,'b'],
   // 主卫 / 主卧
   [2430,7600,2550,7740,'b'],[0,7740,2550,7860,'b'],[2550,6570,2600,6690,'b'],[3500,6570,3580,6690,'b'],
-  [3200,11310,3580,11680,'e'],[3200,11680,3820,11920,'e'],[3580,6570,3820,11680,'b'],
+  [3200,11080,3580,11320,'e'],[3200,11680,3820,11920,'e'],[3580,6570,3820,11680,'b'],
   // 客餐厅 / 阳台
   [3820,9990,4580,10230,'b'],[7030,9990,7240,10230,'b'],[3820,11680,4520,11920,'e'],
+  [3200,11320,3320,11680,'e'],
 ];
 // 窗：[x0,y0,x1,y1,窗台高(m)]
 const WINS = [
-  [900,-240,3200,0,.55],[660,4260,900,4860,1.4],[0,5870,660,6110,1.4],[4700,1390,5710,1641,.9],[7085,3010,8980,3251,.9],
-  [0,11680,3200,11920,.55],[7860,10041,9840,10229,.55],[4520,11680,7480,11920,.9],[7240,10420,7480,11680,.9],
+  [910,-240,3190,0,.55],[670,4270,910,4870,1.4],[0,5870,670,6110,1.4],[4700,1390,5710,1641,.9],[7085,3010,8980,3251,.9],
+  [0,11680,3200,11920,.55],[7860,10041,9760,10161,.55],[4520,11680,7480,11920,.9],[7240,10420,7480,11680,.9],
 ];
 // 平开门：洞口、铰点、关闭方向、开启方向、门宽
 const DOORS = [
@@ -469,19 +472,17 @@ const SLIDES = [
 ];
 const R = (x0,y0,x1,y1) => [[x0,y0],[x1,y0],[x1,y1],[x0,y1]];
 const ROOMS = [
-  {id:'kid', name:'儿童房', poly:R(900,600,3580,2920), mat:'wood', at:[2240,2050]},
-  {id:'bath', name:'卫生间', poly:[[900,3040],[2430,3040],[2430,5870],[1200,5870],[1200,4960],[900,4960]], mat:'antislip', at:[1670,4250]},
+  {id:'kid', name:'儿童房', poly:[[910,0],[3190,0],[3190,600],[3580,600],[3580,2920],[910,2920]], mat:'wood', at:[2240,1950]},
+  {id:'bath', name:'卫生间', poly:[[910,3040],[2430,3040],[2430,5870],[1200,5870],[1200,4960],[910,4960]], mat:'antislip', at:[1670,4250]},
   {id:'mbath', name:'主卫', poly:R(0,6110,2430,7740), mat:'antislip', at:[1215,6900]},
   {id:'hall', name:'过道', poly:[[2550,3040],[3580,3040],[3580,4300],[3820,4300],[3820,6570],[2550,6570]], mat:'tile800', at:[3065,5000]},
-  {id:'master', name:'主卧', poly:[[0,7860],[2550,7860],[2550,6690],[3580,6690],[3580,11310],[3200,11310],[3200,11080],[0,11080]], mat:'wood', at:[1700,8800]},
+  {id:'master', name:'主卧', poly:[[0,7860],[2550,7860],[2550,6690],[3580,6690],[3580,11080],[0,11080]], mat:'wood', at:[1700,8650]},
   {id:'kitchen', name:'厨房', poly:[[3820,2241],[4370,2241],[4370,1641],[6040,1641],[6040,2241],[6580,2241],[6580,4300],[3820,4300]], mat:'tile600', at:[5200,3000]},
   {id:'living', name:'客餐厅', poly:[[3820,4300],[6580,4300],[6580,6640],[7240,6640],[7240,9990],[3820,9990]], mat:'tile800', at:[5300,7050]},
   {id:'foyer', name:'门厅', poly:R(6820,3251,9270,6251), mat:'tile800', at:[8045,4450]},
-  {id:'second', name:'次卧', poly:R(7480,6491,10140,9441), mat:'wood', at:[7900,7900]},
+  {id:'second', name:'次卧', poly:[[7480,6491],[10140,6491],[10140,10041],[7860,10041],[7860,9441],[7480,9441]], mat:'wood', at:[8810,8200]},
   {id:'balcony', name:'阳台', poly:[[3820,10230],[4580,10230],[4580,9990],[7030,9990],[7030,10230],[7240,10230],[7240,11680],[3820,11680]], mat:'tile600', at:[5530,10750]},
-  {id:'bay1', name:'儿童房飘窗', poly:R(900,0,3200,600), mat:'marble', counted:false},
   {id:'bay2', name:'主卧飘窗', poly:R(0,11080,3200,11680), mat:'marble', counted:false},
-  {id:'bay3', name:'次卧飘窗', poly:R(7860,9441,9840,10041), mat:'marble', counted:false},
 ];
 const MATS = {
   wood:    {name:'橡木地板', price:320, sw:'#d8b88a'},
@@ -535,37 +536,17 @@ const F = (type,name,cx,cy,w,d,rot=0,color) => {
 };
 
 function defaultFurniture(){ return [
-  // 主卧
-  // 床离衣柜门留 770 走道；衣柜让出西侧给床头柜，床头柜不挡柜门
-  F('bed','双人床',1000,10130,1800,2000,270,'#c9d6df'), F('nightstand','床头柜',200,9005,450,400,270),
-  F('wardrobe','衣柜',1550,8160,2000,600), F('desk','书桌',3280,9900,1200,600,90), F('chair','椅子',2820,9900,450,480,270),
-  F('baycushion','飘窗垫',1600,11380,520,3000,90),
+  // 附图布置：主卧、儿童房、客餐厅；次卧留空。
+  ...DrawingPlan.furniture(F),
   // 主卫
   F('shower','淋浴房',450,6560,900,900), F('toilet','马桶',1400,6460,400,700), F('vanity','浴室柜',1000,7490,800,500,180),
-  // 儿童房
-  F('bed','单人床',1900,1200,1200,2000,270,'#e8d5b5'), F('wardrobe','衣柜',1750,2620,1700,600,180),
-  F('bookshelf','书架',3430,1900,800,300,90), F('baycushion','飘窗垫',2050,300,520,2200,90),
   // 卫生间
   F('shower','淋浴区',1815,5410,1230,900), F('toilet','马桶',1250,3650,400,700,270), F('vanity','浴室柜',1150,4560,700,480,270),
   // 厨房
   F('counter','橱柜台面',4120,2870,1260,600,270), F('ksink','水槽',4120,2870,800,450,270),
   F('counter','橱柜台面',6280,2870,1260,600,90), F('stove','燃气灶',6280,2870,750,450,90), F('fridge','冰箱',6230,3900,700,700,90),
-  // 餐厅
-  F('table','餐桌',5000,5400,1400,800),
-  F('chair','餐椅',4650,4760,450,480), F('chair','餐椅',5350,4760,450,480),
-  F('chair','餐椅',4650,6040,450,480,180), F('chair','餐椅',5350,6040,450,480,180),
-  // 客厅
-  // 沙发靠西墙、电视靠东墙，东墙上次卧门前（y 6690~7580）保持空出
-  F('rug','地毯',5500,8600,2400,1700,90), F('sofa','三人沙发',4270,8600,2400,900,270), F('tvstand','电视柜',7040,8700,2000,400,90),
-  F('coffeetable','茶几',5450,8600,1300,650,90), F('plant','绿植',4100,7080,500,500),
   // 门厅
   F('shoecab','鞋柜',8045,6050,2450,400,180),
-  // 次卧
-  // 1.2m 床靠南；东墙整面到顶定制柜：北段 600 深衣柜，床头段 300 深；床以北留给游戏地毯和儿童桌凳
-  F('tallcab','到顶定制柜',9840,7366,1750,600,90), F('tallcab','床头定制柜',9990,8841,1200,300,90),
-  F('bed','单人床',8840,8841,1200,2000,90,'#e8d5b5'), F('baycushion','飘窗垫',8850,9741,520,1900,90),
-  F('rug','游戏地毯',8530,7450,1900,1500,0,'#d9e2cf'), F('kidtable','儿童游戏桌',8750,7500,800,600),
-  F('kidstool','儿童小凳',8750,6920,300,300), F('kidstool','儿童小凳',8750,8030,300,300),
   // 阳台
   F('washer','洗衣机',4120,10950,600,600,270), F('armchair','休闲椅',6100,10900,750,750,0,'#d6b99a'), F('plant','绿植',6900,11400,500,500),
 ];}
@@ -701,7 +682,7 @@ const ln = (x1,y1,x2,y2,ex='') => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${
 const pa = (d,f='none',ex='') => `<path d="${d}" fill="${f}" ${ST} ${ex}/>`;
 const DASH = 'stroke-dasharray="4 3"';
 
-function furnSVG(t,w,d,c){
+function furnSVG(t,w,d,c,f={}){
   const x = -w/2, y = -d/2, m = Math.min(w,d);
   switch (t){
     case 'bed': {
@@ -739,7 +720,7 @@ function furnSVG(t,w,d,c){
     case 'chair': return rc(x+25,y+d*.16,w-50,d*.84-10,c,'rx="60"') + rc(x,y,w,d*.2,shade(c,.78),'rx="40"');
     case 'bookshelf': { let s = rc(x,y,w,d,c); for (let bx = x+400; bx < x+w-50; bx += 400) s += ln(bx,y,bx,y+d); return s; }
     case 'baycushion': return rc(x,y,w,d,c,'rx="60"') + rc(x+60,y+80,w-120,Math.min(300,d*.2),'#fff','rx="60"') + rc(x+60,y+d-80-Math.min(300,d*.2),w-120,Math.min(300,d*.2),'#fff','rx="60"');
-    case 'coffeetable': return rc(x,y,w,d,c,'rx="80"') + rc(x+60,y+60,w-120,d-120,shade(c,1.06),'rx="50"');
+    case 'coffeetable': return f.shape==='round' ? ec(0,0,w/2,d/2,c) : rc(x,y,w,d,c,'rx="80"') + rc(x+60,y+60,w-120,d-120,shade(c,1.06),'rx="50"');
     case 'tvstand': return rc(x,y,w,d,c) + rc(x+w*.15,y+30,w*.7,55,'#3a3a3a');
     case 'rug': return rc(x,y,w,d,c,'rx="40" fill-opacity=".6"') + rc(x+90,y+90,w-180,d-180,'none','rx="30" stroke-dasharray="3 3" opacity=".6"');
     case 'plant': {
@@ -820,7 +801,7 @@ function renderFurn(){
     const fs = Math.max(80, Math.min(170, Math.min(f.w,f.d)*.2));
     const label = Math.min(f.w,f.d) >= 380 && !NOLABEL.includes(f.type)
       ? `<text transform="rotate(${-f.rot})" font-size="${fs}" text-anchor="middle" dominant-baseline="central" fill="#4a443c" opacity=".8" pointer-events="none">${esc(nm(f.name))}</text>` : '';
-    return `<g class="furn" data-fid="${f.id}" transform="translate(${f.cx} ${f.cy}) rotate(${f.rot})">${furnSVG(f.type,f.w,f.d,f.color)}${label}</g>`;
+    return `<g class="furn" data-fid="${f.id}" transform="translate(${f.cx} ${f.cy}) rotate(${f.rot})">${furnSVG(f.type,f.w,f.d,f.color,f)}${label}</g>`;
   }).join('');
 }
 
@@ -981,6 +962,11 @@ function overviewPanel(){
   const dem = state.demolished.map(id => WALLS[+id.slice(1)]);
   const demLen = dem.reduce((a,w) => a + Math.max(w[2]-w[0], w[3]-w[1]), 0) / 1000;
   return `
+  <section><h3>${tr('图纸布置 · 10 月 16 日','Drawing layout · Oct 16')}</h3>
+    <p class="muted">${tr('主卧、儿童房、客餐厅按附图布置，次卧留空。图示净高 2400 mm；未标注的家具尺寸及柜内分格为初稿。','Drawing layout for master, children’s room and living/dining; second bedroom empty. Drawn ceiling: 2400 mm. Unlabelled sizes and cabinet interiors are provisional.')}</p>
+    <p class="muted">${tr('儿童房、次卧窗边暂按平地，需核对现场有无固定台面。','Window-side areas in the children’s and second bedrooms are provisionally level; verify any fixed raised platforms on site.')}</p>
+    <button class="btn" id="loadDrawingOverview">${tr('载入图纸布置','Load drawing layout')}</button>
+    <p class="muted" style="font-size:12px">${tr('仅替换这四个房间的家具；保留视角校准、其他房间布置，可撤销。','Replaces furniture in these four rooms only; keeps view calibration and other rooms. Undo is available.')}</p></section>
   <section><h3>${tr('房间面积','Room Areas')} <small>${tr('点击查看 / 更换地面','Click to view / change flooring')}</small></h3>
     <table>${rows}</table>
     <div class="total"><span>${tr('套内使用面积','Net floor area')}</span><b>${fmt(tot)} m²</b></div>
@@ -1019,6 +1005,7 @@ function overviewPanel(){
   </div></section>`)}`;
 }
 function bindOverview(){
+  $('#loadDrawingOverview').onclick = loadDrawingLayout;
   document.querySelectorAll('#panel tr[data-room]').forEach(tr => tr.onclick = () => { select({kind:'room', id:tr.dataset.room}); if (is3D()) window.View3D.flyToRoom(tr.dataset.room); });
   $('#clearMeasure').onclick = () => state.measures.length && mutate(() => state.measures = []);
   $('#clearFurn').onclick = clearLayout;
@@ -1132,7 +1119,12 @@ function furnPanel(f){
       <button class="btn" id="aTop">${tr('置于顶层','Bring to front')}</button><button class="btn" id="aBot">${tr('置于底层','Send to back')}</button>
       <button class="btn danger" id="aDel">${tr('删除','Delete')}</button><button class="btn" id="back">${tr('← 返回','← Back')}</button>
     </div></section>
-  ${cabinetPanel(f)}<section class="muted" style="font-size:12px">${HomeDesign.isCabinet(f)?tr('柜体尺寸请在「编辑内部布局」中解锁修改。','Unlock cabinet dimensions in the interior editor.'):tr('拖动家具移动；拖动上方圆点旋转；拖动右下角方块调整尺寸。开启「贴墙吸附」后靠近墙面会自动贴齐。', 'Drag to move; drag the top dot to rotate; drag the bottom-right square to resize. With "Wall snap" on, items snap flush to nearby walls.')}</section>`;
+  ${drawingReference(f)}${cabinetPanel(f)}<section class="muted" style="font-size:12px">${HomeDesign.isCabinet(f)?tr('柜体尺寸请在「编辑内部布局」中解锁修改。','Unlock cabinet dimensions in the interior editor.'):tr('拖动家具移动；拖动上方圆点旋转；拖动右下角方块调整尺寸。开启「贴墙吸附」后靠近墙面会自动贴齐。', 'Drag to move; drag the top dot to rotate; drag the bottom-right square to resize. With "Wall snap" on, items snap flush to nearby walls.')}</section>`;
+}
+function drawingReference(f){
+  const ref = DrawingPlan.reference(f);
+  if (!ref) return '';
+  return `<section class="drawing-reference"><h3>${tr('图纸参考','Drawing reference')}</h3><p class="muted">${esc(ref.note ? tr(...ref.note) : tr('尺寸和摆位按图示估算，需用实物尺寸复核。','Dimensions and placement are estimated from the drawing; verify actual sizes.'))}</p><small>${tr('这是初稿依据，当前尺寸以编辑值为准。','Reference for the draft; current dimensions are the edited values.')}</small></section>`;
 }
 function bindFurnPanel(f){
   bindCabinetPanel(f);
@@ -1574,6 +1566,16 @@ drawer(null);                                  // 恢复上次的面板收起状
 $('#exportPng').onclick = exportPNG;
 $('#exportJson').onclick = () => download(tr('户型装修方案', 'floor-plan-design') + '.json', new Blob([JSON.stringify(state, null, 2)], {type:'application/json'}));
 $('#importJson').onclick = () => $('#fileIn').click();
+function loadDrawingLayout(){
+  if (!confirm(tr('按图纸替换主卧、儿童房、客餐厅的家具，并清空次卧？\n视角校准、其他房间、地面和测量保留；可撤销。','Replace furniture in the master, children’s room and living/dining, and clear the second bedroom?\nView calibration, other rooms, floors and measurements are kept. You can undo.'))) return;
+  const rooms = ROOMS.filter(r => DrawingPlan.rooms.includes(r.id)).flatMap(roomGroup);
+  ui.sel = null;
+  mutate(() => {
+    state.furniture = [...state.furniture.filter(f => !rooms.some(r => inPoly(f.cx,f.cy,r.poly))), ...DrawingPlan.furniture(F)];
+  });
+  toast(tr('已载入图纸布置；未标注尺寸与柜内分格可继续调整','Drawing layout loaded; unlabelled sizes and cabinet interiors remain editable'));
+}
+$('#loadDrawing').onclick = loadDrawingLayout;
 $('#fileIn').onchange = e => {
   const file = e.target.files[0]; if (!file) return;
   file.text().then(txt => {
@@ -2024,6 +2026,12 @@ function buildFurniture(f){
       break;
     case 'coffeetable': {
       const tm = mat(c, {roughness:.35}), lw = woodM('#3a3027');
+      if (f.shape==='round') {
+        const top = cyl(w/2,w/2,.035,tm,0,.365,0,48); top.scale.z=d/w; g.add(top);
+        const base = cyl(w*.32,w*.34,.025,lw,0,.1,0,40); base.scale.z=d/w; g.add(base);
+        g.add(cyl(.045,.06,.265,lw,0,.1,0,24));
+        vase(g,0,.4,0,.04,.14,'#e9e2d6',R); break;
+      }
       [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a, b]) => g.add(rod([a*(w/2 - .05), 0, b*(d/2 - .05)], [a*(w/2 - .07), .365, b*(d/2 - .07)], .012, lw, .02)));
       g.add(rbox(w, .035, d, tm, 0, .365, 0, .015), rbox(w - .12, .02, d - .12, woodM(darker(c, .85)), 0, .12, 0, .006));
       g.add(box(.3, .03, .22, '#2f5d62', w*.2, .14, 0), box(.26, .025, .19, '#d9b36c', w*.2, .17, .01));
